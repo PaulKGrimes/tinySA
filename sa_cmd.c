@@ -1,5 +1,4 @@
 /*
- * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3, or (at your option)
  * any later version.
@@ -17,6 +16,7 @@
 #pragma GCC push_options
 #pragma GCC optimize ("Os")
 
+uint32_t xtoi(char *t);
 
 static int points = 101; // For 's' and 'm' commands
 
@@ -26,7 +26,7 @@ VNA_SHELL_FUNCTION(cmd_mode)
   static const char cmd_in_out[] = "input|output";
   if (argc != 2) {
   usage:
-    shell_printf("usage: mode %s %s\r\n", cmd_low_high,cmd_in_out);
+    usage_printf("mode %s %s\r\n", cmd_low_high,cmd_in_out);
     return;
   }
   int lh = get_str_index(argv[0], cmd_low_high);
@@ -60,7 +60,7 @@ VNA_SHELL_FUNCTION(cmd_modulation )
   static const char cmd_mod[] = "off|am|nfm|wfm|extern|freq";
   if (argc < 1) {
   usage:
-    shell_printf("usage: modulation %s 100..6000\r\n", cmd_mod);
+    usage_printf("modulation %s 100..6000\r\n", cmd_mod);
     return;
   }
   static const int cmd_mod_val[] = { MO_NONE, MO_AM, MO_NFM, MO_WFM, MO_EXTERNAL, -1};
@@ -77,50 +77,132 @@ VNA_SHELL_FUNCTION(cmd_modulation )
   }
 }
 
+VNA_SHELL_FUNCTION(cmd_calc )
+{
+#ifdef TINYSA4
+  static const char cmd_cal[] = "off|minh|maxh|maxd|aver4|aver16|aver|quasip|log|lin";
+#else
+  static const char cmd_cal[] = "off|minh|maxh|maxd|aver4|aver16|aver|quasip";
+#endif
+  if (argc < 1) {
+  usage:
+    usage_printf("calc [{trace#}] %s\r\n", cmd_cal);
+    return;
+  }
+  int next_arg = 0;
+  int t = 0;
+  if ('0' <= argv[0][0] && argv[0][0] <= '9') {
+    t = my_atoi(argv[0]) - 1;
+    next_arg++;
+    argc--;
+    if (t < 0 || t >= TRACES_MAX)
+      goto usage;
+    if (argc < 1)
+      goto usage;
+  }
+
+  int m = get_str_index(argv[next_arg], cmd_cal);
+  if (m<0)
+     goto usage;
+#ifdef TINYSA4
+  if (m>=8) {
+    linear_averaging = (m == 9);
+  } else
+#endif
+  set_average(t, m);
+}
+
 int generic_option_cmd( const char *cmd, const char *cmd_list, int argc, char *argv)
 {
   if (argc != 1) {
   usage:
-    shell_printf("usage: %s %s\r\n", cmd, cmd_list);
+    usage_printf("%s %s\r\n", cmd, cmd_list);
     return -1;
   }
-  int m = get_str_index(argv, cmd_list);
+  int m = get_str_index(argv, cmd_list); // this will catch the ?
   if (m < 0)
     goto usage;
   return m;
 }
 
-
+#ifdef __SPUR__
 VNA_SHELL_FUNCTION(cmd_spur)
 {
-//  static const char cmd[] = "off|on";
-//  if (argc != 1) {
-//  usage:
-//    shell_printf("usage: spur %s\r\n", cmd);
-//    return;
-//  }
+#ifdef TINYSA4
+  int m = generic_option_cmd("spur", "off|on|auto", argc, argv[0]);
+#else
   int m = generic_option_cmd("spur", "off|on", argc, argv[0]);
+#endif
   if (m>=0) {
     set_spur(m);
     redraw_request |= REDRAW_CAL_STATUS | REDRAW_AREA;
   }
 }
+#endif
+
+#ifdef TINYSA4
+VNA_SHELL_FUNCTION(cmd_lna)
+{
+  int m = generic_option_cmd("lna", "off|on", argc, argv[0]);
+  if (m>=0) {
+    set_extra_lna(m);
+    redraw_request |= REDRAW_CAL_STATUS | REDRAW_AREA;
+  }
+}
+#endif
+#ifdef __ULTRA__
+VNA_SHELL_FUNCTION(cmd_ultra)
+{
+  const char *ultra_cmd = "off|on|auto|start";
+  if (argc<1 || argc>2)
+    goto usage;
+  if (argv[0][0] == '?')
+    goto usage;
+  int m = get_str_index(argv[0], ultra_cmd);
+  freq_t a = ULTRA_AUTO;
+  switch(m) {
+  case 0:
+  case 1:
+    config.ultra = m;
+    update_min_max_freq();
+    break;
+  case 2:
+    goto auto_label;
+  case 3:
+    if (argc != 2)
+      goto usage;
+    a = my_atoui(argv[1]);
+    auto_label:
+    config.ultra_threshold = a;
+    ultra_threshold = a;
+    dirty = true;
+    break;
+  default:
+    {
+     usage:
+      usage_printf("ultra %s {freq}\r\n", ultra_cmd);
+    }
+  }
+}
+/*
+VNA_SHELL_FUNCTION(cmd_ultra_start)
+{
+  if (argc != 1 || argv[0][0] == '?') {
+    usage_printf("ultra_start {0..4290M}\r\n%QHz\r\n", config.ultra_threshold);
+    return;
+  } else {
+    freq_t a = (freq_t)my_atoi(argv[0]);
+    config.ultra_threshold = a;
+    ultra_threshold = (config.ultra_threshold == 0 ? DEFAULT_ULTRA_THRESHOLD : config.ultra_threshold);
+    dirty = true;
+    config_save();
+  }
+}
+*/
+#endif
 
 VNA_SHELL_FUNCTION(cmd_output)
 {
-#if 0
-  if (argc != 1) {
-  usage:
-    shell_printf("usage: output on|off\r\n");
-    return;
-  }
-  if (strcmp(argv[0],"on") == 0) {
-    setting.mute = false;
-  } else if (strcmp(argv[0],"off") == 0) {
-    setting.mute = true;
-  } else
-    goto usage;
-#endif
   int m = generic_option_cmd("output", "on|off", argc, argv[0]);
   if (m>=0) {
     setting.mute = m;
@@ -130,27 +212,68 @@ VNA_SHELL_FUNCTION(cmd_output)
 
 VNA_SHELL_FUNCTION(cmd_load)
 {
-  if (argc != 1) {
+  if (argc != 1 || argv[0][0] == '?') {
   usage:
-    shell_printf("usage: load 0..4\r\n");
+    usage_printf("load 0..4\r\n");
     return;
   }
-  int a = my_atoi(argv[0]);
-  if (0 <= a && a <= 4) {
-    caldata_recall(a);
-  } else
+  uint16_t a = my_atoui(argv[0]);
+  if (a > 4)
     goto usage;
+  if (caldata_recall(a) == -1) {
+    if (a == 0)
+      reset_settings(setting.mode);
+  }
 }
+
+#ifdef TINYSA4
+
+static uint8_t reg_agc_lna = 0;
+
+VNA_SHELL_FUNCTION(cmd_lna2)
+{
+  int a;
+  if (argc != 1  || argv[0][0] == '?') {
+    usage_printf("lna2 0..7|auto\r\n");
+    return;
+  }
+  if (get_str_index(argv[0],"auto") == 0) {
+    reg_agc_lna &= 0xf0;
+  } else {
+    a = my_atoi(argv[0]);
+    reg_agc_lna &= 0xf0;
+    reg_agc_lna |= 0x08 | a;
+  }
+  SI446x_set_AGC_LNA(reg_agc_lna);
+}
+
+VNA_SHELL_FUNCTION(cmd_agc)
+{
+  int a;
+  if (argc != 1  || argv[0][0] == '?') {
+    usage_printf("agc 0..7|auto\r\n");
+    return;
+  }
+  if (get_str_index(argv[0],"auto") == 0) {
+    reg_agc_lna &= 0x0f;
+  } else {
+    a = my_atoi(argv[0]);
+    reg_agc_lna &= 0x0f;
+    reg_agc_lna |= 0x80 | (a << 4);
+  }
+  SI446x_set_AGC_LNA(reg_agc_lna);
+}
+
+#endif
 
 
 VNA_SHELL_FUNCTION(cmd_attenuate)
 {
-  if (argc != 1) {
-//  usage:
-    shell_printf("usage: attenuate 0..31|auto\r\n");
+  if (argc != 1 || argv[0][0] == '?') {
+    usage_printf("attenuate 0..31|auto\r\n");
     return;
   }
-  if (strcmp(argv[0],"auto") == 0) {
+  if (get_str_index(argv[0],"auto") == 0) {
     if (!setting.auto_attenuation)
       set_auto_attenuation();
   } else {
@@ -165,11 +288,11 @@ VNA_SHELL_FUNCTION(cmd_attenuate)
 
 VNA_SHELL_FUNCTION(cmd_level)
 {
-  if (argc != 1) {
+  if (argc != 1  || argv[0][0] == '?') {
     if (setting.mode==M_GENLOW)
-      shell_printf("usage: level -76..-6\r\n");
+      usage_printf("level -76..-6\r\n");
     if (setting.mode==M_GENHIGH)
-      shell_printf("usage: level -38..13\r\n");
+      usage_printf("level -38..13\r\n");
     return;
   }
   float f = my_atof(argv[0]);
@@ -178,8 +301,8 @@ VNA_SHELL_FUNCTION(cmd_level)
 
 VNA_SHELL_FUNCTION(cmd_sweeptime)
 {
-  if (argc != 1) {
-    shell_printf("usage: sweeptime 0.003..60\r\n");
+  if (argc != 1  || argv[0][0] == '?') {
+    usage_printf("sweeptime 0.003..60\r\n");
     return;
   }
   float f = my_atof(argv[0]);
@@ -188,14 +311,14 @@ VNA_SHELL_FUNCTION(cmd_sweeptime)
 
 
 
-VNA_SHELL_FUNCTION(cmd_offset)
+VNA_SHELL_FUNCTION(cmd_ext_gain)
 {
-  if (argc != 1) {
-    shell_printf("usage: offset -100.0..+100.0\r\n");
+  if (argc != 1 || argv[0][0] == '?') {
+    usage_printf("ext_gain -100.0..+100.0\r\n");
     return;
   }
   float o = my_atof(argv[0]);
-  set_offset(o);
+  set_external_gain(o);
 }
 
 
@@ -203,8 +326,8 @@ VNA_SHELL_FUNCTION(cmd_offset)
 
 VNA_SHELL_FUNCTION(cmd_levelchange)
 {
-  if (argc != 1) {
-    shell_printf("usage: levelchange -70..+70\r\n");
+  if (argc != 1  || argv[0][0] == '?') {
+    usage_printf("levelchange -70..+70\r\n");
     return;
   }
   float f = my_atof(argv[0]);
@@ -213,23 +336,66 @@ VNA_SHELL_FUNCTION(cmd_levelchange)
 
 VNA_SHELL_FUNCTION(cmd_leveloffset)
 {
+  //                                     0    1      2
+#ifdef TINYSA4
+  static const char cmd_mode_list[] = "low|high|switch|receive_switch|lna|harmonic|shift|drive1|drive2";
+#else
+  static const char cmd_mode_list[] = "low|high|switch|receive_switch";
+#endif
   if (argc == 0) {
-    shell_printf("leveloffset low %.1f\r\n", config.low_level_offset);
-    shell_printf("leveloffset high %.1f\r\n", config.high_level_offset);
+    const char *p = "leveloffset %s %.1f\r\n";
+    shell_printf(p, "low",          config.low_level_offset);
+    shell_printf(p, "high",         config.high_level_offset);
+    shell_printf(p, "low output",   config.low_level_output_offset);
+    shell_printf(p, "high output",  config.high_level_output_offset);
+    shell_printf(p, "switch",       config.switch_offset);
+    shell_printf(p, "receive_switch",config.receive_switch_offset);
+#ifdef TINYSA4
+    shell_printf(p, "lna",          config.lna_level_offset);
+    shell_printf(p, "harmonic",     config.harmonic_level_offset);
+    shell_printf(p, "shift",        config.shift_level_offset);
+    shell_printf(p, "drive1",       config.drive1_level_offset);
+    shell_printf(p, "drive2",       config.drive2_level_offset);
+#endif
     return;
-  } else if (argc == 2) {
-    float v = my_atof(argv[1]);
-    if (strcmp(argv[0],"low") == 0)
-      config.low_level_offset = v;
-    else if (strcmp(argv[0],"high") == 0)
-      config.high_level_offset = v;
-    else
-      goto usage;
-    dirty = true;
-  } else {
-  usage:
-    shell_printf("leveloffset [low|high] [<offset>]\r\n");
   }
+  if (argv[0][0] == '?')
+    goto usage;
+
+  int mode = get_str_index(argv[0], cmd_mode_list);
+  if (mode < 0) goto usage;
+  float v;
+  if (argc == 2){
+    v = my_atof(argv[1]);
+    switch (mode){
+      case 0: config.low_level_offset = v; break;
+      case 1: config.high_level_offset = v; break;
+      case 2: config.switch_offset = v; break;
+      case 3: config.receive_switch_offset = v; break;
+#ifdef TINYSA4
+      case 4: config.lna_level_offset = v; break;
+      case 5: config.harmonic_level_offset = v; break;
+      case 6: config.shift_level_offset = v; break;
+      case 7: config.drive1_level_offset = v; break;
+      case 8: config.drive2_level_offset = v; break;
+#endif
+      default: goto usage;
+    }
+    dirty = true;
+    return;
+  }
+  if (argc == 3 && get_str_index(argv[1], "output") == 0){
+    v = my_atof(argv[2]);
+    switch (mode){
+      case 0: config.low_level_output_offset = v; break;
+      case 1: config.high_level_output_offset = v; break;
+      default: goto usage;
+    }
+    dirty = true;
+    return;
+  }
+usage:
+  shell_printf("leveloffset [%s] {output} [-20..+20]\r\n", cmd_mode_list);
 }
 
 VNA_SHELL_FUNCTION(cmd_deviceid)
@@ -238,18 +404,21 @@ VNA_SHELL_FUNCTION(cmd_deviceid)
     shell_printf("deviceid %d\r\n", config.deviceid);
     return;
   } else if (argc == 1) {
+    if (argv[0][0] == '?')
+      goto usage;
     float v = my_atoui(argv[0]);
     config.deviceid = v;
   } else {
-    shell_printf("usage: deviceid [<number>]\r\n");
+  usage:
+    usage_printf("deviceid [<number>]\r\n");
   }
 }
 
 VNA_SHELL_FUNCTION(cmd_sweep_voltage)
 {
   float value;
-  if (argc != 1) {
-    shell_printf("usage: sweep_voltage {value(0-3.3)}\r\n"\
+  if (argc != 1 || argv[0][0] == '?') {
+   usage_printf("sweep_voltage {value(0-3.3)}\r\n"\
                  "current value: %f\r\n", config.sweep_voltage);
     return;
   }
@@ -257,46 +426,146 @@ VNA_SHELL_FUNCTION(cmd_sweep_voltage)
   config.sweep_voltage = value;
 }
 
+#ifdef __NOISE_FIGURE__
+VNA_SHELL_FUNCTION(cmd_nf)
+{
+  if (argc != 1  || argv[0][0] == '?') {
+//usage:
+    usage_printf("nf {value}\r\n"\
+                 "%f\r\n", config.noise_figure);
+    return;
+  }
+  config.noise_figure = my_atof(argv[0]);
+  dirty = true;
+}
+#endif
+
 VNA_SHELL_FUNCTION(cmd_rbw)
 {
-  if (argc != 1) {
+  if (argc != 1 || argv[0][0] == '?') {
   usage:
-    shell_printf("usage: rbw 2..600|auto\r\n");
-    return;
+#ifdef TINYSA4
+	usage_printf("rbw 0.3..850|auto\r\n");
+#else
+	usage_printf("rbw 2..600|auto\r\n");
+#endif
+	return;
   }
   if (get_str_index(argv[0], "auto|0")>=0) {
     if (setting.rbw_x10 != 0)
       set_RBW(0);
   } else {
-    uint32_t a = my_atoui(argv[0]);
-    if (a < 2 || a>600)
+    float a = my_atof(argv[0]);
+    if (a < 0.2 ||
+#ifdef TINYSA4
+        a>850
+#else
+        a>600
+#endif
+        )
       goto usage;
     if (setting.rbw_x10 != a*10)
-      set_RBW(a*10);
+      set_RBW((int) ( a*10));
  }
 }
 
 VNA_SHELL_FUNCTION(cmd_if)
 {
-  if (argc != 1) {
+  if (argc != 1 || argv[0][0] == '?') {
   usage:
-    shell_printf("usage: if {433M..435M}\r\n");
+    usage_printf("if {433M..435M}\r\n%QHz\r\n", setting.frequency_IF);
+    return;
+  }
+  freq_t a = (freq_t)my_atoi(argv[0]);
+  if (a!= 0 &&( a < (DEFAULT_IF - (freq_t)2000000) || a>(DEFAULT_IF + (freq_t)2000000)))
+    goto usage;
+  setting.auto_IF = false;
+  set_IF(a);
+}
+
+VNA_SHELL_FUNCTION(cmd_zero)
+{
+  if (argc != 1 || argv[0][0] == '?') {
+    usage_printf("zero {level}\r\n%ddBm\r\n", config.ext_zero_level);
+    return;
+  }
+  config.ext_zero_level = my_atoi(argv[0]);
+}
+
+#ifdef TINYSA4
+VNA_SHELL_FUNCTION(cmd_direct)
+{
+  if (argc<1 || argc>2)
+    goto usage;
+  if (argv[0][0] == '?')
+    goto usage;
+  freq_t value = 0;
+  if (argc == 2) value = my_atoui(argv[1]);
+  // Parse direct {start|stop} {freq(Hz)}
+  static const char direct_cmd[] = "start|stop|on|off";
+  int type = get_str_index(argv[0], direct_cmd);
+  switch(type) {
+  case 0:
+    config.direct_start = value;
+    return;
+  case 1:
+    config.direct_stop = value;
+    return;
+  case 2:
+    config.direct = true;
+    return;
+  case 3:
+    config.direct = false;
+    return;
+  }
+usage:
+  usage_printf("direct {%s} {freq(Hz)}\r\n", direct_cmd);
+}
+
+VNA_SHELL_FUNCTION(cmd_if1)
+{
+  if (argc != 1 || argv[0][0] == '?') {
+  usage:
+    usage_printf("if1 {975M..979M}\r\n%QHz\r\n", config.frequency_IF1);
     return;
   } else {
-    freq_t a = (freq_t)my_atoi(argv[0]);
-    if (a!= 0 &&( a < (DEFAULT_IF - (freq_t)2000000) || a>(DEFAULT_IF + (freq_t)2000000)))
+    freq_t a = (freq_t)my_atoui(argv[0]);
+    if (a!= 0 &&( a < (DEFAULT_IF - (freq_t)80000000) || a>(DEFAULT_IF + (freq_t)80000000)))
       goto usage;
-    setting.auto_IF = false;
-    set_IF(a);
+    config.frequency_IF1 = a;
+    config_save();
   }
 }
 
+VNA_SHELL_FUNCTION(cmd_actual_freq)
+{
+  if (argc != 1 || argv[0][0] == '?') {
+    shell_printf("%DHz\r\n", config.setting_frequency_30mhz);
+    return;
+  } else {
+    set_30mhz(my_atoui(argv[0]));
+  }
+}
+#endif
+
+#ifdef TINYSA3
+VNA_SHELL_FUNCTION(cmd_actual_freq)
+{
+  if (argc != 1 || argv[0][0] == '?') {
+    shell_printf("%DHz\r\n", config.setting_frequency_10mhz);
+    return;
+  } else {
+    set_10mhz(my_atoui(argv[0]));
+  }
+}
+#endif
 
 VNA_SHELL_FUNCTION(cmd_trigger)
 {
   if (argc == 0)
     goto usage;
-
+  if(argv[0][0] == '?')
+    goto usage;
   if (( '0' <= argv[0][0] && argv[0][0] <= '9') || argv[0][0] == '-') {
     float t = my_atof(argv[0]);
     if (setting.trigger == T_AUTO )
@@ -325,15 +594,15 @@ usage:
 
 VNA_SHELL_FUNCTION(cmd_selftest)
 {
-  if (argc < 1 || argc > 2) {
-    shell_printf("usage: selftest (1-3) [arg]\r\n");
+  if (argc < 1 || argc > 2 || argv[0][0] == '?') {
+    usage_printf("selftest (1-3) [arg]\r\n");
     return;
   }
   setting.test = my_atoi(argv[0]);
   if (argc == 1)
     setting.test_argument = 0;
   else
-    setting.test_argument = my_atoi(argv[1]);
+    setting.test_argument = my_atoui(argv[1]);
   sweep_mode = SWEEP_SELFTEST;
 }
 
@@ -341,7 +610,6 @@ VNA_SHELL_FUNCTION(cmd_selftest)
 
 static int VFO = 0;
 
-#ifdef __ADF4351__
 
 uint32_t xtoi(char *t)
 {
@@ -361,13 +629,15 @@ uint32_t xtoi(char *t)
   return v;
 }
 
+#ifdef __ADF4351__
+
 VNA_SHELL_FUNCTION(cmd_x)
 {
   uint32_t reg;
 
 
   if (argc != 1) {
-    shell_printf("usage: x value(0-FFFFFFFF)\r\n");
+    usage_printf("x value(0-FFFFFFFF)\r\n");
     return;
   }
   reg = xtoi(argv[0]);
@@ -388,9 +658,11 @@ VNA_SHELL_FUNCTION(cmd_x)
 
 VNA_SHELL_FUNCTION(cmd_i)
 {
-  int rvalue;
+  (void)argc;
+  (void)argv;
 return;             // Don't use!!!!
 #ifdef __SI4432__
+int rvalue;
   SI4432_Init();
   shell_printf("SI4432 init done\r\n");
   if (argc == 1) {
@@ -416,8 +688,31 @@ VNA_SHELL_FUNCTION(cmd_d)
   (void) argc;
   (void) argv;
   int32_t a = my_atoi(argv[0]);
+#if false
+  int32_t d;
+  if (argc == 2)
+    d = my_atoi(argv[1]);
+  else {
+    d = a;
+    a = 2;
+  }
+  switch (a) {
+  case 1:
+    SI4463_set_output_level(d);
+    break;
+  case 2:
+    ADF4351_drive (d);
+    break;
+  case 3:
+    ADF4351_aux_drive(d);
+    break;
+  }
+//  setting.lo_drive=a;
+//  dirty = true;
+#else
   setting.lo_drive=a;
   dirty = true;
+#endif
 }
 
 #if 0
@@ -442,7 +737,7 @@ VNA_SHELL_FUNCTION(cmd_a)
 {
   (void)argc;
   if (argc != 1) {
-    shell_printf("a=%u\r\n", frequencyStart);
+    shell_printf("a=%U\r\n", frequencyStart);
     return;
   }
   freq_t value = my_atoui(argv[0]);
@@ -454,7 +749,7 @@ VNA_SHELL_FUNCTION(cmd_b)
 {
   (void)argc;
   if (argc != 1) {
-    shell_printf("b=%u\r\n", frequencyStop);
+    shell_printf("b=%U\r\n", frequencyStop);
     return;
   }
   freq_t value = my_atoui(argv[0]);
@@ -507,14 +802,14 @@ VNA_SHELL_FUNCTION(cmd_v)
 
 VNA_SHELL_FUNCTION(cmd_y)
 {
-  int rvalue;
-  if (argc != 1 && argc != 2) {
-    shell_printf("usage: y {addr(0-95)} [value(0-0xFF)]\r\n");
+  if (argc < 1) {
+    usage_printf("y {addr(0-95)} [value(0-0xFF)]\r\n");
     return;
   }
-  rvalue = my_atoui(argv[0]);
 #ifdef __SI4432__
   int lvalue = 0;
+  int rvalue;
+  rvalue = xtoi(argv[0]);
   SI4432_Sel = VFO;
   if (argc == 2){
     lvalue = my_atoui(argv[1]);
@@ -524,13 +819,49 @@ VNA_SHELL_FUNCTION(cmd_y)
     shell_printf("%x\r\n", lvalue);
   }
 #endif
+#ifdef __SI4463__
+  uint8_t data[16];
+  data[0] = xtoi(argv[0]);
+  for (int i=1; i < argc; i++) {
+    data[i] = xtoi(argv[i]);
+  }
+  SI4463_do_api(data, argc, data, 16);
+  for (int i=0; i<16; i++)
+    shell_printf("%02x ", data[i]);
+  shell_printf("\r\n");
+#endif
 }
+#ifdef TINYSA4
+VNA_SHELL_FUNCTION(cmd_z)
+{
+  if (argc != 1) {
+    usage_printf("z 0..30000\r\n%d\r\n", SI4432_step_delay);
+    return;
+  }
+  if (argc == 1) {
+    setting.step_delay = atoi(argv[0]);
+    dirty = true;
+  }
+}
+
+VNA_SHELL_FUNCTION(cmd_n)
+{
+  if (argc != 1) {
+    usage_printf("z 0..30000\r\n%d\r\n", SI4432_offset_delay);
+    return;
+  }
+  if (argc == 1) {
+    setting.offset_delay = atoi(argv[0]);
+    dirty = true;
+  }
+}
+#endif
 #if 0       // not used
 VNA_SHELL_FUNCTION(cmd_z)
 {
   static const char cmd_z_list[] = "t|r|i";
   if (argc != 1) {
-    shell_printf("usage: z %s\r\n", cmd_z_list);
+    usage_printf("z %s\r\n", cmd_z_list);
     return;
   }
   if (argc == 1) {
@@ -573,7 +904,7 @@ void sweep_remote(void)
   for (i = 0; i <= step; i++, f+=delta) {
     if (operation_requested)
       break;
-    int val = perform(false, i, f, false) + float_TO_PURE_RSSI(EXT_ZERO_LEVEL);
+    int val = perform(false, i, f, false) + float_TO_PURE_RSSI(config.ext_zero_level);
     streamPut(shell_stream, 'x');
     streamPut(shell_stream, (uint8_t)(val & 0xFF));
     streamPut(shell_stream, (uint8_t)((val>>8) & 0xFF));
@@ -602,14 +933,19 @@ VNA_SHELL_FUNCTION(cmd_m)
 //  update_rbw();
   chThdSleepMilliseconds(10);
   sweep_mode = SWEEP_REMOTE;
-//  update_rbw();
+  while (sweep_mode != 0)
+    chThdSleepMilliseconds(10);
+  //  update_rbw();
 }
 
 VNA_SHELL_FUNCTION(cmd_p)
 {
   (void)argc;
-return;
   int p = my_atoi(argv[0]);
+#ifdef TINYSA4
+  SI4463_set_output_level(p);
+#endif
+return;
   int a = my_atoi(argv[1]);
   if (p==5)
     set_attenuation(-a);
@@ -620,12 +956,30 @@ return;
       set_refer_output(a);
 }
 
+#ifdef TINYSA4
+VNA_SHELL_FUNCTION(cmd_g)
+{
+  (void)argc;
+  int p = my_atoi(argv[0]);
+  int a = my_atoi(argv[1]);
+  SI4463_set_gpio(p,a);
+}
+#endif
+
 VNA_SHELL_FUNCTION(cmd_w)
 {
   (void)argc;
   int p = my_atoi(argv[0]);
 return;
   set_RBW(p*10);
+}
+
+VNA_SHELL_FUNCTION(cmd_u)
+{
+  (void)argc;
+  (void)argv;
+//  int p = my_atoi(argv[0]);
+  toggle_debug_avoid();
 }
 
 VNA_SHELL_FUNCTION(cmd_f)
@@ -637,34 +991,51 @@ VNA_SHELL_FUNCTION(cmd_f)
 }
 #endif
 
+//#define CORRECTION_LOW      0
+//#define CORRECTION_LNA      1
+//#define CORRECTION_LOW_ULTRA 2
+//#define CORRECTION_LNA_ULTRA 3
+//#define CORRECTION_LOW_OUT  4
+//#define CORRECTION_HIGH     5
+
 VNA_SHELL_FUNCTION(cmd_correction)
 {
   (void)argc;
-  if (argc == 0) {
+#ifdef TINYSA4
+  static const char cmd[] = "low|lna|ultra|ultra_lna|out|high";
+  static const char range[] = "0-19";
+#else
+  static const char cmd[] = "low|high";
+  static const char range[] = "0-9";
+#endif
+  int m = get_str_index(argv[0], cmd);
+  if (argc == 1) {
     shell_printf("index frequency value\r\n");
     for (int i=0; i<CORRECTION_POINTS; i++) {
-      shell_printf("%d %d %.1f\r\n", i, setting.correction_frequency[i], setting.correction_value[i]);
+      shell_printf("correction %s %d %D %.1f\r\n", argv[0], i, config.correction_frequency[m][i], config.correction_value[m][i]);
     }
     return;
   }
-  if (argc == 1 && (strcmp(argv[0],"reset") == 0)) {
+  if (argc == 2 && (get_str_index(argv[1],"reset") == 0)) {
     for (int i=0; i<CORRECTION_POINTS; i++) {
-      setting.correction_value[i] = 0.0;
+      config.correction_value[m][i] = 0.0;
     }
-    shell_printf("correction table reset\r\n");
+    dirty = true;       // recalculate intermediate table
+    shell_printf("correction table %s reset\r\n", argv[0]);
     return;
   }
-  if (argc != 3) {
-    shell_printf("usage: correction 0-9 frequency(Hz) value(dB)\r\n");
+  if (argc != 4) {
+    usage_printf("correction %s %s frequency(Hz) value(dB)\r\n", cmd, range);
     return;
   }
-  int i = my_atoi(argv[0]);
-  freq_t f = my_atoui(argv[1]);
-  float v = my_atof(argv[2]);
-  setting.correction_frequency[i] = f;
-  setting.correction_value[i] = v;
+  int i = my_atoi(argv[1]);
+  freq_t f = my_atoui(argv[2]);
+  float v = my_atof(argv[3]);
+  config.correction_frequency[m][i] = f;
+  config.correction_value[m][i] = v;
+  dirty = true;       // recalculate intermediate table
   redraw_request|=REDRAW_AREA;                  // to ensure the change in level will be visible
-  shell_printf("updated %d to %d %.1f\r\n", i, setting.correction_frequency[i], setting.correction_value[i]);
+  shell_printf("updated %d to %D %.1f\r\n", i, config.correction_frequency[m][i], config.correction_value[m][i]);
 }
 
 VNA_SHELL_FUNCTION(cmd_scanraw)
@@ -672,7 +1043,7 @@ VNA_SHELL_FUNCTION(cmd_scanraw)
   freq_t start, stop;
   uint32_t points = sweep_points;
   if (argc < 2 || argc > 3) {
-    shell_printf("usage: scanraw {start(Hz)} {stop(Hz)} [points]\r\n");
+    usage_printf("scanraw {start(Hz)} {stop(Hz)} [points]\r\n");
     return;
   }
 
@@ -686,8 +1057,8 @@ VNA_SHELL_FUNCTION(cmd_scanraw)
     points = my_atoi(argv[2]);
   }
 
-//  if (get_waterfall())
-//    disable_waterfall();            // display dma hangs when waterfall is enabled
+  if (setting.waterfall)
+    disable_waterfall();            // display dma hangs when waterfall is enabled
 
   freq_t old_step = setting.frequency_step;
   float f_step = (stop-start)/ points;
@@ -706,8 +1077,8 @@ VNA_SHELL_FUNCTION(cmd_scanraw)
   dirty = true;
 
   for (uint32_t i = 0; i<points; i++) {
-    int val = perform(false, i, start +(freq_t)(f_step * i), false) + float_TO_PURE_RSSI(EXT_ZERO_LEVEL);
-    if (operation_requested && SDU1.config->usbp->state != USB_ACTIVE) // break on operation in perform
+    int val = perform(false, i, start +(freq_t)(f_step * i), false) + float_TO_PURE_RSSI(config.ext_zero_level);
+    if (operation_requested || SDU1.config->usbp->state != USB_ACTIVE) // break on operation in perform
       break;
     streamPut(shell_stream, 'x');
     streamPut(shell_stream, (uint8_t)(val & 0xFF));
@@ -733,13 +1104,53 @@ VNA_SHELL_FUNCTION(cmd_caloutput)
 {
   static const char cmd[] = "off|30|15|10|4|3|2|1";
   if (argc != 1) {
-    shell_printf("usage: caloutput %s\r\n", cmd);
+    usage_printf("caloutput %s\r\n", cmd);
     return;
   }
   int m = get_str_index(argv[0], cmd);
   if (m != -1)
     set_refer_output(m - 1);
 }
+
+#ifdef TINYSA4
+VNA_SHELL_FUNCTION(cmd_q)
+{
+  static const char cmd[] = "s|d|a";
+  if (argc < 1) {
+    usage:
+    usage_printf("q s|d 0..18|a 0..63  %s\r\n", cmd);
+    test_output=false;
+    return;
+  }
+  int i = 0;
+  test_output=true;
+  test_output_switch = false;
+  test_output_drive = MAX_DRIVE;
+  test_output_attenuate = 0;
+  again:
+  if (argc == 0)
+    return;
+  int m = get_str_index(argv[i++], cmd);
+  argc--;
+  switch (m) {
+  case -1: goto usage;
+  case 0:  test_output_switch = true; break;
+  case 1: test_output_drive = atoi(argv[i++]); argc--; break;
+  case 2: test_output_attenuate = atoi(argv[i++]); argc--; break;
+  }
+  goto again;
+}
+
+extern float Si446x_get_temp(void);
+VNA_SHELL_FUNCTION(cmd_k)
+{
+  (void)argc;
+  (void)argv;
+  shell_printf("%.2f\r\n", Si446x_get_temp());
+}
+
+
+#endif
 
 
 #pragma GCC pop_options

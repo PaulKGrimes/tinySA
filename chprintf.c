@@ -42,22 +42,26 @@
 #define MAX_FILLER 11
 #define FLOAT_PRECISION 9
 
-#pragma pack(push, 2)
-
 static const uint32_t pow10[FLOAT_PRECISION+1] = {
     1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000
 };
 // Prefixes for values bigger then 1000.0
-//                            1  1e3, 1e6, 1e9, 1e12, 1e15, 1e18, 1e21, 1e24
-static char bigPrefix[] = {' ', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y', 0};
+//                                 1  1e3, 1e6, 1e9, 1e12, 1e15, 1e18, 1e21, 1e24
+static const char bigPrefix[] = {' ', 'k', 'M', 'G',  'T',  'P',  'E',  'Z',  'Y', 0};
 // Prefixes for values less   then 1.0
-//                          1e-3, 1e-6, 1e-9, 1e-12, 1e-15, 1e-18, 1e-21, 1e-24
-static char smallPrefix[] = {'m', 0x1d, 'n', 'p', 'f', 'a', 'z', 'y', 0};
+//                                1e-3, 1e-6, 1e-9, 1e-12, 1e-15, 1e-18, 1e-21, 1e-24
+static const char smallPrefix[] = {'m', 0x1d,  'n',   'p',   'f',   'a',   'z',   'y', 0};
 
-#pragma pack(pop)
+#ifdef TINYSA4
+typedef uint64_t ulong_t;
+typedef int64_t long_t;
+#else
+typedef uint32_t ulong_t;
+typedef int32_t long_t;
+#endif
 
 static char *long_to_string_with_divisor(char *p,
-                                         uint32_t num,
+                                         long_t num,
                                          uint32_t radix,
                                          uint32_t precision) {
   char *q = p + MAX_FILLER;
@@ -78,18 +82,18 @@ static char *long_to_string_with_divisor(char *p,
 
 // default prescision = 13
 // g.mmm kkk hhh
-#define MAX_FREQ_PRESCISION 13
+#define MAX_FREQ_PRESCISION 15
 #define FREQ_PSET           1
 #define FREQ_NO_SPACE       2
 #define FREQ_PREFIX_SPACE   4
 
 static char *
-ulong_freq(char *p, uint32_t freq, uint32_t precision)
+ulong_freq(char *p, ulong_t freq, uint32_t width, uint32_t precision)
 {
   uint8_t flag = FREQ_PSET;
   flag|= precision == 0 ? FREQ_PREFIX_SPACE : FREQ_NO_SPACE;
 
-  if (precision == 0 || precision > MAX_FREQ_PRESCISION)
+  if (/* precision == 0 || */ precision > MAX_FREQ_PRESCISION)
     precision = MAX_FREQ_PRESCISION;
   char *q = p + MAX_FREQ_PRESCISION;
   char *b = q;
@@ -98,14 +102,14 @@ ulong_freq(char *p, uint32_t freq, uint32_t precision)
   // Set format (every 3 digits add ' ' up to GHz)
   uint32_t format = 0b00100100100;
   do {
-#if 0
+#if 1
     uint8_t c = freq % 10;
     freq/= 10;
 #else
     // Fast and compact division uint32_t on 10, using shifts, result:
     // c = freq % 10
     // freq = freq / 10;
-    uint32_t c = freq;
+    long_t c = freq;
     freq >>= 1;
     freq += freq >> 1;
     freq += freq >> 4;
@@ -132,6 +136,8 @@ ulong_freq(char *p, uint32_t freq, uint32_t precision)
 
   // Get string size
   uint32_t i = (b - q);
+  if (width > 0 && i>width)
+    i=width;
   // copy string
   // Replace first ' ' by '.', remove ' ' if size too big
   do {
@@ -141,13 +147,16 @@ ulong_freq(char *p, uint32_t freq, uint32_t precision)
       if (flag & FREQ_PSET) {
         c = '.';
         flag &= ~FREQ_PSET;
-      } else if (flag & FREQ_NO_SPACE)
-        c = *q++;
+      } else if (flag & FREQ_NO_SPACE) {
+        c = *q++; --i;
+      }
     }
     *p++ = c;
     if (!(flag & FREQ_PSET) && precision-- == 0)
       break;
   } while (--i);
+  if (p[-1] == '.')     // No '.' at end
+    p--;
   // Put pref (amd space before it if need)
   if (flag & FREQ_PREFIX_SPACE && s != ' ') 
     *p++ = ' ';
@@ -181,7 +190,7 @@ static char *ftoa(char *p, float num, uint32_t precision) {
 
 static char *ftoaS(char *p, float num, int precision) {
   char prefix=0;
-  char *ptr;
+  const char *ptr;
   if (num > 1000.0){
     for (ptr = bigPrefix+1; *ptr && num > 1000.0; num/=1000, ptr++)
       ;
@@ -248,16 +257,19 @@ static char *ftoaS(char *p, float num, int precision) {
 #define PAD_ZERO            16
 #define PLUS_SPACE          32
 #define DEFAULT_PRESCISION  64
+#define _32_BIT_FLOAT      128
 
 int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
   char *p, *s, c, filler=' ';
   int precision, width;
   int n = 0;
   uint32_t  state;
-  union {
+  volatile union {
       uint32_t u;
       int32_t  l;
       float    f;
+      long_t   x;
+      ulong_t   ux;
   }value;
 #if CHPRINTF_USE_FLOAT
   char tmpbuf[2*MAX_FILLER + 1];
@@ -297,6 +309,8 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
       else if (*fmt == ' ')
         state|=PLUS_SPACE;
 #endif
+      else if (*fmt == 'b')
+        state|=_32_BIT_FLOAT;
       else
         break;
       fmt++;
@@ -330,19 +344,22 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
       state|=DEFAULT_PRESCISION;
     //Get [length]
     if (c == 'l' || c == 'L') {
-      // state|=IS_LONG; // Ignore Long
+#ifdef TINYSA4
+      state|=IS_LONG; // Ignore Long
+#endif
       if (*fmt)
         c = *fmt++;
     }
-	/*
+#ifdef TINYSA4
     else if ((c >= 'A') && (c <= 'Z'))
         state|=IS_LONG;
-    */
+#endif
     // Parse type
     switch (c) {
     case 'c':
       state&=~PAD_ZERO;
-      *p++ = va_arg(ap, int);
+      c = va_arg(ap, int);
+      if (c) *p++ = c;
       break;
     case 's':
       state&=~PAD_ZERO;
@@ -356,15 +373,17 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
     case 'D':
     case 'd':
     case 'I':
-    case 'i':/*
-      if (state & IS_LONG)
-        value.l = va_arg(ap, long);
-      else*/
-        value.l = va_arg(ap, uint32_t);
-      if (value.l < 0) {
+    case 'i':
+#ifdef TINYSA4
+	if (state & IS_LONG)
+        value.x = va_arg(ap, int64_t);
+      else
+#endif
+        value.x = va_arg(ap, int32_t);
+      if (value.x < 0) {
         state|=NEGATIVE;
         *p++ = '-';
-        value.l = -value.l;
+        value.x = -value.x;
       }
       else if (state & POSITIVE)
         *p++ = '+';
@@ -372,16 +391,27 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
       else if (state & PLUS_SPACE)
         *p++ = ' ';
 #endif
-      p = long_to_string_with_divisor(p, value.l, 10, 0);
+      p = long_to_string_with_divisor(p, value.x, 10, 0);
       break;
     case 'q':
-      value.u = va_arg(ap, uint32_t);
-      p=ulong_freq(p, value.u, precision);
+    case 'Q':
+#ifdef TINYSA4
+      if (state & IS_LONG)
+        value.ux = va_arg(ap, uint64_t);
+      else
+#endif
+        value.ux = va_arg(ap, uint32_t);
+      if (state&DEFAULT_PRESCISION)
+        precision = MAX_FREQ_PRESCISION;
+      p=ulong_freq(p, value.ux, width, precision);
       break;
 #if CHPRINTF_USE_FLOAT
     case 'F':
     case 'f':
-      value.f = va_arg(ap, double);
+      if (state & _32_BIT_FLOAT)
+        value.u = va_arg(ap, uint32_t);
+      else
+        value.f = va_arg(ap, double);
       if (value.f < 0) {
         state|=NEGATIVE;
         *p++ = '-';
@@ -411,12 +441,14 @@ int chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap) {
     case 'O':
     case 'o':
       c = 8;
-unsigned_common:/*
+unsigned_common:
+#ifdef TINYSA4
       if (state & IS_LONG)
-        value.u = va_arg(ap, unsigned long);
-      else*/
-        value.u = va_arg(ap, uint32_t);
-      p = long_to_string_with_divisor(p, value.u, c, 0);
+        value.ux = va_arg(ap, uint64_t);
+      else
+#endif
+        value.ux = va_arg(ap, uint32_t);
+      p = long_to_string_with_divisor(p, value.ux, c, 0);
       break;
     default:
       *p++ = c;

@@ -177,7 +177,7 @@
                                      PIN_PUPDR_PULLDOWN(2) | \
                                      PIN_PUPDR_PULLDOWN(3) | \
                                      PIN_PUPDR_FLOATING(4) |         \
-                                     PIN_PUPDR_PULLDOWN(5) |         \
+                                     PIN_PUPDR_PULLUP(5) |         \
                                      PIN_PUPDR_FLOATING(6) |         \
                                      PIN_PUPDR_FLOATING(7) |         \
                                      PIN_PUPDR_PULLUP(GPIOA_MCO) | \
@@ -247,7 +247,7 @@
                                      PIN_MODE_OUTPUT(GPIO_RF_PWR) |          \
                                      PIN_MODE_OUTPUT(GPIO_SPI2_CLK) |          \
                                      PIN_MODE_OUTPUT(11) |          \
-                                     PIN_MODE_OUTPUT(12) | \
+                                     PIN_MODE_INPUT(12) | \
                                      PIN_MODE_OUTPUT(13) | \
                                      PIN_MODE_INPUT(GPIO_SPI2_SDO) | \
                                      PIN_MODE_OUTPUT(GPIO_SPI2_SDI))
@@ -267,8 +267,8 @@
                                      PIN_OTYPE_PUSHPULL(13) | \
                                      PIN_OTYPE_PUSHPULL(GPIO_SPI2_SDO) | \
                                      PIN_OTYPE_PUSHPULL(GPIO_SPI2_SDI))
-#define VAL_GPIOB_OSPEEDR           (PIN_PUPDR_FLOATING(GPIOB_XN) | \
-                                     PIN_PUPDR_FLOATING(GPIOB_YN) | \
+#define VAL_GPIOB_OSPEEDR           (PIN_OSPEED_100M(GPIOB_XN) | \
+                                     PIN_OSPEED_100M(GPIOB_YN) | \
                                      PIN_OSPEED_100M(2) |          \
                                      PIN_OSPEED_100M(3) | \
                                      PIN_OSPEED_100M(4) |          \

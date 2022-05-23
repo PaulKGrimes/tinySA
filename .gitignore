@@ -15,3 +15,5 @@ dorelease.bat
 ChibiOS
 .settings/language.settings.xml
 .cproject
+desktop.ini
+

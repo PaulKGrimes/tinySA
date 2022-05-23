@@ -18,14 +18,29 @@
  */
 #include "ch.h"
 
-#ifdef TINYSA_F303
-#include "adc_F303.h"
+//#ifdef TINYSA_F303
+#ifdef TINYSA_F072
+#error "Remove comment for #ifdef TINYSA_F303"
+#endif
+#ifndef TINYSA4
 #define TINYSA4
-#else
+#endif
+#define TINYSA4_PROTO
+//#endif
+
+#ifdef TINYSA_F072
+#ifdef TINYSA_F303
+#error "Remove comment for #ifdef TINYSA_F072"
+#endif
+#ifndef TINYSA3
 #define TINYSA3
 #endif
+#endif
+
 // Need enable HAL_USE_SPI in halconf.h
 #define __USE_DISPLAY_DMA__
+
+//#define __DEBUG_SPUR__
 
 #define __SA__
 #ifdef TINYSA3
@@ -35,128 +50,182 @@
 #define __SI4463__
 #define __SI4468__
 #define __ADF4351__
+#define __NEW_SWITCHES__
+// #define __SI5351__
 #endif
 #define __PE4302__
 //#define __SIMULATION__
-//#define __PIPELINE__
-#define __SCROLL__
+#define __SCROLL__                // Add waterfall option
+#define __LEVEL_METER__
 #define __ICONS__
 #define __MEASURE__
-#define __LINEARITY__         // Not available
-#define __SELFTEST__
-#define __CALIBRATE__
-#define __FAST_SWEEP__          // Pre-fill SI4432 RSSI buffer  to get fastest sweep in zero span mode
+#define __LINEARITY__             // Not available
+#define __SELFTEST__              // Add selftest option (not fully disable it)
+#define __CALIBRATE__             // Add calibration menu and functions
+#define __FAST_SWEEP__            // Pre-fill SI4432 RSSI buffer  to get fastest sweep in zero span mode
+// #define __AUDIO__
 //#define __HAM_BAND__
-//#define __ULTRA__             // Add harmonics mode on low input.
-#define __SPUR__                // Does spur reduction by shifting IF
-//#define __USE_SERIAL_CONSOLE__  // Enable serial I/O connection (need enable HAL_USE_SERIAL as TRUE in halconf.h)
-#define __SINGLE_LETTER__
-#define __NICE_BIG_FONT__
-#define __QUASI_PEAK__
-//#define __REMOTE_DESKTOP__
+#define __SPUR__                  // Does spur reduction by shifting IF
+#define __USE_SERIAL_CONSOLE__  // Enable serial I/O connection (need enable HAL_USE_SERIAL as TRUE in halconf.h)
+#ifdef __USE_SERIAL_CONSOLE__
+//#if (HAL_USE_SERIAL != TRUE)
+//#error "HAL_USE_SERIAL must be set to true"
+//#endif
+#endif
+#define __SINGLE_LETTER__         // Add fast console commands
+#define __NICE_BIG_FONT__         // Add not scaled big font for menus
+#define __QUASI_PEAK__            // Add quasi peak average option
+#define __REMOTE_DESKTOP__        // Add remote desktop option
+#define __LISTEN__
+#define __CHANNEL_POWER__
+#define __LIMITS__
+#ifdef TINYSA3
+#define __MCU_CLOCK_SHIFT__
+#endif
+#ifdef TINYSA4
+#define __MCU_CLOCK_SHIFT__
+#define __ULTRA__
+#define __USE_RTC__               // Enable RTC clock
+#define __USE_SD_CARD__           // Enable SD card support
+#define __SD_CARD_LOAD__          // Allow run commands from SD card (config.ini in root)
+#define __LCD_BRIGHTNESS__        // LCD or hardware allow change brightness, add menu item for this
+//#define __HARMONIC__
+#define __NOISE_FIGURE__
+#define __VBW__
+#define __SWEEP_RESTART__
+// #define DIRECT_CORRECTION        // Not enough space for config in one flash page.
+#define DB_PER_DEGREE_BELOW               0.056
+#define DB_PER_DEGREE_ABOVE               0.069
+#define CENTER_TEMPERATURE          34.0
+#define __WAIT_CTS_WHILE_SLEEPING__
+#define __MARKER_CACHE__
+#define TINYSA4_4
+#ifdef TINYSA4_4
+#define __SI5351__
+#endif
+//#define __FFT_VBW__
+//#define __FFT_DECONV__
+#else
+//#define __ULTRA__
+//#define __HARMONIC__
+#define __USE_FREQ_TABLE__      // Enable use table for frequency list
+#endif
 
 #ifdef TINYSA3
+#define VARIANT(X,Y) (X)
 #define DEFAULT_IF  433800000
 #define DEFAULT_SPUR_IF 434000000
 #define DEFAULT_MAX_FREQ    350000000
+#define MAX_LO_FREQ         959800000UL
+#define MIN_LO_FREQ         240000000UL
+#define MIN_BELOW_LO         550000000UL
+#define ULTRA_MAX_FREQ      1390000000UL
+//#define DEFAULT_MAX_FREQ    527000000
 #define HIGH_MIN_FREQ_MHZ   240
-#define HIGH_MAX_FREQ_MHZ   960
+#define HIGH_MAX_FREQ_MHZ   959
 #endif
 #ifdef TINYSA4
-#define DEFAULT_IF  978000000
-#define DEFAULT_SPUR_IF 979000000
-#define DEFAULT_MAX_FREQ    800000000
-#define HIGH_MIN_FREQ_MHZ   850
-#define HIGH_MAX_FREQ_MHZ   1150
+#define FREQ_MULTIPLIER 100         // Multiplier of the 30MHz reference to get accurate frequency correction
+#define VARIANT(X,Y) (Y)
+#define DEFAULT_IF  ((freq_t)977400000)
+#define DEFAULT_SPUR_OFFSET ((freq_t)(actual_rbw_x10 > 3000 ? 1500000 : 1000000))
+#define STATIC_DEFAULT_SPUR_OFFSET ((freq_t) 1500000)
+#define DEFAULT_MAX_FREQ    ((freq_t) 800000000)
+#define MAX_LOW_OUTPUT_FREQ ((freq_t)1100000000)
+#define HIGH_MIN_FREQ_MHZ   136// 825
+#define HIGH_MAX_FREQ_MHZ   1130
+#define MINIMUM_DIRECT_FREQ 830000000ULL
+#define ULTRA_MAX_FREQ      5350000000ULL
+#define ULTRA_AUTO  10000000000ULL // 10GHz
+//#define ULTRA_MAX_FREQ      2900000000ULL
+#define MAX_LO_FREQ         4350000000ULL
+#define MAX_ABOVE_IF_FREQ   3350000000ULL
+#define MIN_BELOW_IF_FREQ   2300000000ULL
+//#define LOW_MAX_FREQ         800000000ULL
+#define MIN_BELOW_LO         550000000ULL
+#ifdef __NEW_SWITCHES__
+#define DIRECT_START config.direct_start
+#define DIRECT_STOP  config.direct_stop
+#endif
 #endif
 /*
  * main.c
  */
 #ifdef __SA__
+#ifdef TINYSA4
+#define POINTS_COUNT     450
+#else
 #define POINTS_COUNT     290
+#endif
+#ifdef TINYSA4
+#define MARKER_COUNT    8
+#define TRACES_MAX 4
+#else
 #define MARKER_COUNT    4
-
 #define TRACES_MAX 3
+#endif
+
+#define TRACE_ACTUAL    0           // order linked to colors in palette!!!!!
+#if TRACES_MAX == 3
+#define TRACE_TEMP      (LCD_TRACE_3_COLOR - LCD_TRACE_1_COLOR)
+#else
+#define TRACE_TEMP      (LCD_TRACE_4_COLOR - LCD_TRACE_1_COLOR)
+#define TRACE_STORED2    (LCD_TRACE_3_COLOR - LCD_TRACE_1_COLOR)
+#endif
+#define TRACE_STORED    (LCD_TRACE_2_COLOR - LCD_TRACE_1_COLOR)
 //#define TRACE_AGE       3
-#define TRACE_ACTUAL    2
-#define TRACE_STORED    1
-#define TRACE_TEMP      0
-// #define age_t     measured[TRACE_AGE]
-#define stored_t  measured[TRACE_STORED]
+#define TRACE_INVALID  -1
+
 #define actual_t  measured[TRACE_ACTUAL]
+#define stored_t  measured[TRACE_STORED]
+#if TRACES_MAX == 4
+#define stored2_t  measured[TRACE_STORED2]
+#endif
 #define temp_t    measured[TRACE_TEMP]
+// #define age_t     measured[TRACE_AGE]
 
+extern const char * const trc_channel_name[];
+
+#ifdef TINYSA3
 typedef uint32_t freq_t;
-#define CORRECTION_POINTS  10       // Frequency dependent level correction table entries
-
+ typedef int32_t long_t;
+ extern bool has_esd;
+ #define CORRECTION_POINTS  10       // Frequency dependent level correction table entries
+ #define CORRECTION_LOW  0
+ #define CORRECTION_HIGH 1
+ #define CORRECTION_SIZE 2
+#endif
+#ifdef TINYSA4
+ typedef uint64_t freq_t;
+ typedef int64_t long_t;
+ #define CORRECTION_POINTS  20       // Frequency dependent level correction table entries
+ #define CORRECTION_LOW      0
+ #define CORRECTION_LNA      1
+ #define CORRECTION_LOW_ULTRA 2
+ #define CORRECTION_LNA_ULTRA 3
+ #ifdef  DIRECT_CORRECTION
+   #define CORRECTION_DIRECT   4
+   #define CORRECTION_LNA_DIRECT   5
+   #define CORRECTION_LOW_OUT  6
+   #define CORRECTION_HIGH     7
+   #define CORRECTION_SIZE     8
+#else
+  #define CORRECTION_LOW_OUT  4
+  #define CORRECTION_HIGH     5
+  #define CORRECTION_SIZE     6
+#endif
+#endif
 typedef float measurement_t[TRACES_MAX][POINTS_COUNT];
 extern measurement_t measured;
 #endif
 
-#ifdef __REMOTE_DESKTOP__
-extern volatile int auto_capture;
-extern volatile int mouse_x;
-extern volatile int mouse_y;
-extern volatile int mouse_down;
-#endif
+extern freq_t minFreq;
+extern freq_t maxFreq;
+#define START_MIN minFreq
+#define STOP_MAX maxFreq
 
-#ifdef __VNA__
-// Minimum frequency set
-#define START_MIN                50000
-// Maximum frequency set
-#define STOP_MAX                 2700000000U
-// Frequency offset (sin_cos table in dsp.c generated for this offset, if change need create new table)
-#define FREQUENCY_OFFSET         5000
-// Speed of light const
-#define SPEED_OF_LIGHT           299792458
-// pi const
-#define VNA_PI                   3.14159265358979323846
+extern const char TINYSA_VERSION[];
 
-#define POINTS_COUNT 101
-extern float measured[2][POINTS_COUNT][2];
-
-#define CAL_LOAD 0
-#define CAL_OPEN 1
-#define CAL_SHORT 2
-#define CAL_THRU 3
-#define CAL_ISOLN 4
-
-#define CALSTAT_LOAD (1<<0)
-#define CALSTAT_OPEN (1<<1)
-#define CALSTAT_SHORT (1<<2)
-#define CALSTAT_THRU (1<<3)
-#define CALSTAT_ISOLN (1<<4)
-#define CALSTAT_ES (1<<5)
-#define CALSTAT_ER (1<<6)
-#define CALSTAT_ET (1<<7)
-#define CALSTAT_ED CALSTAT_LOAD
-#define CALSTAT_EX CALSTAT_ISOLN
-#define CALSTAT_APPLY (1<<8)
-#define CALSTAT_INTERPOLATED (1<<9)
-
-#define ETERM_ED 0 /* error term directivity */
-#define ETERM_ES 1 /* error term source match */
-#define ETERM_ER 2 /* error term refrection tracking */
-#define ETERM_ET 3 /* error term transmission tracking */
-#define ETERM_EX 4 /* error term isolation */
-
-#define DOMAIN_MODE (1<<0)
-#define DOMAIN_FREQ (0<<0)
-#define DOMAIN_TIME (1<<0)
-#define TD_FUNC (0b11<<1)
-#define TD_FUNC_BANDPASS (0b00<<1)
-#define TD_FUNC_LOWPASS_IMPULSE (0b01<<1)
-#define TD_FUNC_LOWPASS_STEP    (0b10<<1)
-#define TD_WINDOW (0b11<<3)
-#define TD_WINDOW_NORMAL (0b00<<3)
-#define TD_WINDOW_MINIMUM (0b01<<3)
-#define TD_WINDOW_MAXIMUM (0b10<<3)
-
-#define FFT_SIZE 256
-
-void cal_collect(int type);
-void cal_done(void);
-#endif
 #define MAX_FREQ_TYPE 5
 enum stimulus_type {
   ST_START=0, ST_STOP, ST_CENTER, ST_SPAN, ST_CW, ST_DUMMY      // Last is used in marker ops
@@ -168,19 +237,35 @@ void set_sweep_frequency(int type, freq_t frequency);
 freq_t get_sweep_frequency(int type);
 void my_microsecond_delay(int t);
 float my_atof(const char *p);
+freq_t my_atoui(const char *p);
 int shell_printf(const char *fmt, ...);
+int usage_printf(const char *fmt, ...);
+
 #ifdef __REMOTE_DESKTOP__
-void send_region(const char *t, int x, int y, int w, int h);
-void send_buffer(uint8_t * buf, int s);
+extern uint8_t remote_mouse_down;
+extern uint8_t auto_capture;
+typedef struct {
+  char new_str[6];
+  int16_t x;
+  int16_t y;
+  int16_t w;
+  int16_t h;
+} remote_region_t;
+void send_region(remote_region_t *rd, uint8_t * buf, uint16_t size);
 #endif
+
 void set_marker_frequency(int m, freq_t f);
+void set_marker_time(int m, float f);
+void set_marker_index(int m, int16_t idx);
 void toggle_sweep(void);
 void toggle_mute(void);
+void toggle_pulse(void);
 void load_default_properties(void);
 
 enum {
-  AV_OFF, AV_MIN, AV_MAX_HOLD, AV_MAX_DECAY, AV_4, AV_16, AV_QUASI
+  AV_OFF, AV_MIN, AV_MAX_HOLD, AV_MAX_DECAY, AV_4, AV_16, AV_100, AV_QUASI, AV_TABLE, AV_DECONV
 };
+
 enum {
   M_LOW, M_HIGH, M_GENLOW, M_GENHIGH, M_ULTRA
 };
@@ -197,25 +282,63 @@ enum {
 #endif
 #define MODE_HIGH(x)  ((x) == M_HIGH || (x) == M_GENHIGH )
 #define MODE_LOW(x)  ((x) == M_LOW || (x) == M_GENLOW )
+
+#ifdef __SI4432__
+#define SI4432_RX                          0
+#define SI4432_LO                          1
+#define MODE_SELECT(x) (MODE_HIGH(x) ? SI4432_LO : SI4432_RX)
+#endif
+#ifdef __SI4468__
+// Not use mode
 #define MODE_SELECT(x) (MODE_HIGH(x) ? 1 : 0)
+#endif
 
 #define SWEEP_ENABLE    0x01
 #define SWEEP_ONCE      0x02
 #define SWEEP_CALIBRATE 0x04
 #define SWEEP_SELFTEST  0x08
 #define SWEEP_REMOTE    0x10
+#ifdef __LISTEN__
+#define SWEEP_LISTEN    0x20
 //#define SWEEP_FACTORY    0x20
-
+#endif
 
 extern uint8_t sweep_mode;
-extern bool completed;
+extern uint8_t completed;
 extern const char *info_about[];
+
+#ifdef TINYSA4
+void toggle_extra_lna(void);
+void set_extra_lna(int t);
+#endif
 
 // ------------------------------- sa_core.c ----------------------------------
 
+
+extern float level_min(void);
+extern float level_max(void);
+extern float level_range(void);
+extern float channel_power[3];
+extern float channel_power_watt[3];
 extern const char * const unit_string[];
+extern uint16_t vbwSteps;
+#ifdef __ULTRA__
+extern freq_t ultra_threshold;
+extern bool ultra;
+#endif
+#ifdef TINYSA4
+extern float measured_noise_figure;
+extern float *drive_dBm;
+extern int test_output;
+extern int test_output_switch;
+extern int test_output_drive;
+extern int test_output_attenuate;
+extern bool level_error;
+#else
+extern const int8_t drive_dBm [];
+#endif
 extern uint8_t signal_is_AM;
-extern const int reffer_freq[];
+extern const uint32_t reffer_freq[];
 extern freq_t minFreq;
 extern freq_t maxFreq;
 int level_is_calibrated(void);
@@ -231,14 +354,19 @@ void set_attenuation(float);
 float get_attenuation(void);
 float get_level(void);
 void set_harmonic(int);
+void store_trace(int f, int t);
+void subtract_trace(int t, int f);
 //extern int setting.harmonic;
 int search_is_greater(void);
 void set_auto_attenuation(void);
-void set_auto_reflevel(int);
+void set_auto_reflevel(bool);
 int is_paused(void);
 void set_actual_power(float);
 void SetGenerate(int);
 void set_RBW(uint32_t rbw_x10);
+#ifdef __VBW__
+void set_VBW(uint32_t vbw_x100);
+#endif
 void set_lo_drive(int d);
 void set_rx_drive(int d);
 void set_IF(int f);
@@ -256,15 +384,18 @@ void set_spur(int v);
 void toggle_spur(void);
 void toggle_mirror_masking(void);
 #endif
-void set_average(int);
-int GetAverage(void);
+void set_average(int t, int);
 //extern int setting.average;
 void  set_storage(void);
 void  set_clear_storage(void);
 void  set_subtract_storage(void);
-void  toggle_normalize(void);
-void toggle_waterfall(void);
+void  toggle_normalize(int);
+void set_waterfall(void);
 void disable_waterfall(void);
+#ifdef __LEVEL_METER__
+void set_level_meter(void);
+void disable_level_meter(void);
+#endif
 void set_mode(int);
 int GetMode(void);
 void set_reflevel(float);
@@ -284,17 +415,49 @@ void set_attack(int);
 void set_noise(int);
 void toggle_tracking_output(void);
 extern int32_t frequencyExtra;
-void set_10mhz(freq_t);
 void set_modulation(int);
 void set_modulation_frequency(int);
-int search_maximum(int m, int center, int span);
+int search_maximum(int m, freq_t center, int span);
 //extern int setting.modulation;
 void set_measurement(int);
 // extern int settingSpeed;
 //extern int setting.step_delay;
 void sweep_remote(void);
+void calculate_step_delay(void);
 extern int generic_option_cmd( const char *cmd, const char *cmd_list, int argc, char *argv);
+extern bool global_abort;
+#ifdef __ULTRA__
+void toggle_ultra(void);
+void enable_ultra(int);
+#endif
+#ifdef TINYSA4
+void clear_frequency_cache(void);
+void toggle_high_out_adf4350(void);
+extern int high_out_adf4350;
+void set_30mhz(freq_t);
+void set_IF2(int f);
+void set_R(int f);
+extern void set_modulo(uint32_t f);
+extern uint32_t local_modulo;
+extern void fill_spur_table(void);
+extern float low_out_offset(void);
+extern float high_out_offset(void);
+#define LOW_OUT_OFFSET low_out_offset()
+#define HIGH_OUT_OFFSET high_out_offset()
+extern bool debug_avoid;
+extern bool progress_bar;
 
+extern void toggle_debug_avoid(void);
+extern float log_averaging_correction;
+#else
+void set_10mhz(freq_t);
+#define LOW_OUT_OFFSET config.low_level_output_offset
+#define HIGH_OUT_OFFSET config.high_level_output_offset
+#endif
+#ifdef __ULTRA__
+extern bool debug_spur;
+extern void toggle_debug_spur(void);
+#endif
 #ifdef __AUDIO__
 /*
  * dsp.c
@@ -330,6 +493,7 @@ extern void tlv320aic3204_set_gain(int lgain, int rgain);
 extern void tlv320aic3204_select(int channel);
 
 #endif
+
 /*
  * plot.c
  */
@@ -354,13 +518,11 @@ extern uint16_t graph_bottom;
 #define GRIDY             (CHART_BOTTOM / NGRIDY)
 #endif
 
+#define SD_CARD_START   (LCD_HEIGHT-40-20)
 #define BATTERY_START   (LCD_HEIGHT-40)
 
 #define WIDTH  (LCD_WIDTH - 1 - OFFSETX)
 #define HEIGHT (GRIDY*NGRIDY)
-
-#define CELLWIDTH  (32)
-#define CELLHEIGHT (32)
 
 #define FREQUENCIES_XPOS1 OFFSETX
 #define FREQUENCIES_XPOS2 (LCD_WIDTH-120)
@@ -373,6 +535,9 @@ extern uint16_t graph_bottom;
 
 #define GRID_X_TEXT       (AREA_WIDTH_NORMAL - 7*5)
 
+// Marker start drag distance (can be bigger for various display resolution)
+#define MARKER_PICKUP_DISTANCE 20
+
 // Smith/polar chart
 //#define P_CENTER_X (CELLOFFSETX + WIDTH/2)
 //#define P_CENTER_Y (HEIGHT/2)
@@ -380,12 +545,22 @@ extern uint16_t graph_bottom;
 
 // Menu Button
 // Maximum menu buttons count
-#define MENU_BUTTON_MAX         8
+#ifdef TINYSA4
+#define MENU_BUTTON_MAX        16
+#define MENU_BUTTON_MIN         9
+#else
+#define MENU_BUTTON_MAX        16
+#define MENU_BUTTON_MIN         8
+#endif
 #define MENU_BUTTON_WIDTH      80
-#define MENU_BUTTON_HEIGHT     (LCD_HEIGHT/8-1)
 #define MENU_BUTTON_BORDER      1
 #define KEYBOARD_BUTTON_BORDER  2
 #define FORM_BUTTON_BORDER      2
+
+#define MENU_BUTTON_HEIGHT_N(n)   (LCD_HEIGHT/(n)-1)
+
+// Define message box width
+#define MESSAGE_BOX_WIDTH     180
 
 // Form button (at center screen better be less LCD_WIDTH - 2*OFFSETX)
 #define MENU_FORM_WIDTH    (LCD_WIDTH - 2*OFFSETX)
@@ -393,8 +568,8 @@ extern uint16_t graph_bottom;
 // Num Input height at bottom
 #define NUM_INPUT_HEIGHT   32
 
-extern int16_t area_width;
-extern int16_t area_height;
+extern uint16_t area_width;
+extern uint16_t area_height;
 
 // Define marker size (can be 0 or 1)
 #ifdef TINYSA3
@@ -465,6 +640,15 @@ extern const uint8_t numfont16x22[];
 #define S_OHM      "\036"  // 0x1E
 #define S_DEGREE   "\037"  // 0x1F
 
+// String prefix for select font size (use not printable chars)
+#define  FONT_s     "\001"
+#define _FONT_s     1
+// bold as default
+#define  FONT_b     ""
+#define _FONT_b     2
+#define  FONT_w     "\003"
+#define _FONT_w     3
+
 // Max palette indexes in config
 #define MAX_PALETTE     32
 
@@ -486,23 +670,17 @@ enum trace_type {
 // Electrical Delay
 // Phase
 
-#define MAX_UNIT_TYPE 4
+#define MAX_UNIT_TYPE 6     // Index of U_DBC
 enum unit_type {
-  U_DBM=0, U_DBMV, U_DBUV, U_VOLT, U_WATT, U_DBC //  dBc only for displaying delta marker info
+  U_DBM=0, U_DBMV, U_DBUV, U_RAW, U_VOLT, U_WATT, U_DBC //  dBc only for displaying delta marker info
 };
+
 #define UNIT_IS_LINEAR(T) ( T >= U_VOLT ? true : false)
 #define UNIT_IS_LOG(T) ( T >= U_VOLT ? false : true)
 
 float value(float);
-
-typedef struct trace {
-  uint8_t enabled;
-  uint8_t type;
-  uint8_t channel;
-  uint8_t reserved;
-  float scale;
-  float refpos;
-} trace_t;
+float index_to_value(const int i);
+float marker_to_value(const int i);
 
 #define FREQ_MODE_START_STOP    0x0
 #define FREQ_MODE_CENTER_SPAN   0x1
@@ -513,90 +691,137 @@ typedef struct trace {
 #define _MODE_SERIAL           0x04
 #define _MODE_USB              0x00
 
+#pragma pack(push, 4)
 typedef struct config {
   int32_t magic;
+  uint32_t deviceid;
   uint16_t lcd_palette[MAX_PALETTE];
   int16_t  touch_cal[4];
   uint32_t _serial_speed;
-#ifdef __VNA__
-  freq_t harmonic_freq_threshold;
-#endif
   uint16_t dac_value;
   uint16_t vbat_offset;
   float low_level_offset;
   float high_level_offset;
-  freq_t low_correction_frequency[CORRECTION_POINTS];
-  float    low_correction_value[CORRECTION_POINTS];
-  freq_t high_correction_frequency[CORRECTION_POINTS];
-  float    high_correction_value[CORRECTION_POINTS];
-  uint32_t deviceid;
+  float low_level_output_offset;
+  float high_level_output_offset;
+  float receive_switch_offset;
+#ifdef TINYSA4
+  float lna_level_offset;
+  float harmonic_level_offset;
+  float shift_level_offset;
+  float drive1_level_offset;
+  float drive2_level_offset;
+#endif
+#ifdef __NOISE_FIGURE__
+  float noise_figure;
+#endif
+  float  correction_value[CORRECTION_SIZE][CORRECTION_POINTS];
+  freq_t correction_frequency[CORRECTION_SIZE][CORRECTION_POINTS];
+#ifdef TINYSA4
+  freq_t  setting_frequency_30mhz;
+#else
   freq_t  setting_frequency_10mhz;
+#endif
 
   uint16_t gridlines;
   uint16_t hambands;
 #ifdef TINYSA4
+  freq_t frequency_IF1;
   freq_t frequency_IF2;
 #endif
-  int8_t   _mode;  
+#ifdef __ULTRA__
+  freq_t ultra_threshold;
+  freq_t direct_start;
+  freq_t direct_stop;
+  int8_t    ultra;
+#endif
+  uint8_t   _mode;
   int8_t    cor_am;
   int8_t    cor_wfm;
   int8_t    cor_nfm;
+  uint8_t  _brightness;
+  uint8_t high_out_adf4350;
+  uint8_t flip;
+#ifdef __ULTRA__
+  uint8_t    direct;
+#endif
   float sweep_voltage;
+  float switch_offset;
+  int16_t   ext_zero_level;
   uint32_t    dummy;
 //  uint8_t _reserved[22];
   freq_t checksum;
 } config_t;
+#pragma pack(pop)
 
 extern config_t config;
 //#define settingLevelOffset config.level_offset
 float get_level_offset(void);
 
-void set_trace_type(int t, int type);
-void set_trace_channel(int t, int channel);
-void set_trace_scale(float scale);
-void set_trace_refpos(float refpos);
-float get_trace_scale(int t);
-float get_trace_refpos(int t);
-const char *get_trace_typename(int t);
-extern int in_selftest;
+extern uint8_t in_selftest;
 extern int display_test(void);
+extern void clear_marker_cache(void);
 
 //
 // Shell config functions and macros
 // Serial connect definitions not used if Serial mode disabled
-// Minimum speed - USART_SPEED_MULTIPLIER
-// Maximum speed - USART_SPEED_MULTIPLIER * 256
-// Can be: 19200, 38400, 57600, 76800, 115200, 230400, 460800, 921600, 1843200, 3686400
-#define USART_SPEED_MULTIPLIER          19200
-#define USART_SPEED_SETTING(speed)     ((speed)/USART_SPEED_MULTIPLIER - 1)
-#define USART_GET_SPEED(idx)           (((idx) + 1) * USART_SPEED_MULTIPLIER)
 void shell_update_speed(void);
 void shell_reset_console(void);
 int  shell_serial_printf(const char *fmt, ...);
 
-
-#ifdef __VNA
-void set_electrical_delay(float picoseconds);
-float get_electrical_delay(void);
-float groupdelay_from_array(int i, float array[POINTS_COUNT][2]);
-#endif
 // marker
 enum {
-  M_NORMAL=0,M_REFERENCE=1, M_DELTA=2, M_NOISE=4, M_TRACKING=8, M_DELETE=16  // Tracking must be last.
+  M_NORMAL=0,M_REFERENCE=1, M_DELTA=2, M_NOISE=4, M_STORED=8, M_AVER=16, M_TRACKING=32, M_DELETE=64  // Tracking must be last.
 };
 
 enum {
-  M_DISABLED = false, M_ENABLED = true
+  M_DISABLED = 0, M_ENABLED = 1
 };
 
+
+// Flags/macros for enable/disable traces
+#define TRACE_ACTUAL_FLAG (1<<(TRACE_ACTUAL))
+#define TRACE_STORED_FLAG (1<<(TRACE_STORED))
+#define TRACE_TEMP_FLAG   (1<<(TRACE_TEMP))
+
+#define TRACE_ENABLE(t_mask)  {setting._traces|= (t_mask);}
+#define TRACE_DISABLE(t_mask) {setting._traces&=~(t_mask);}
+
+#define IS_TRACES_ENABLED(t_mask) (setting._traces&(t_mask))
+#define IS_TRACE_ENABLE(t)        (setting._traces&(1<<(t)))
+#define IS_TRACE_DISABLE(t)      !(setting._traces&(1<<(t)))
+
+// Enable trace for show only after sweep complete (disable it at call)
+void enableTracesAtComplete(uint8_t mask);
+
 typedef struct {
-  int8_t enabled;
-  int8_t mtype;
+  uint8_t mtype;
+  uint8_t enabled;
+  uint8_t ref;
+  uint8_t trace;
   int16_t index;
   freq_t frequency;
 } marker_t;
 
-#define MARKERS_MAX 4
+#ifdef __LIMITS__
+#ifdef TINYSA4
+#define LIMITS_MAX  8
+#else
+#define LIMITS_MAX  6
+#endif
+#define REFERENCE_MAX TRACES_MAX
+typedef struct {
+  uint8_t enabled;
+  float level;
+  freq_t frequency;
+  int16_t index;
+} limit_t;
+extern uint8_t active_limit;
+extern void limits_update(void);
+#endif
+
+#define MARKERS_MAX MARKER_COUNT
+#define MARKER_INVALID -1
 
 extern int8_t previous_marker;
 extern int8_t marker_tracking;
@@ -611,7 +836,6 @@ void request_to_draw_cells_behind_numeric_input(void);
 void redraw_marker(int marker);
 void markmap_all_markers(void);
 void plot_into_index(measurement_t measured);
-void force_set_markmap(void);
 void draw_frequencies(void);
 void draw_all(bool flush);
 
@@ -619,17 +843,15 @@ void draw_cal_status(void);
 
 //void markmap_all_markers(void);
 
-void marker_position(int m, int t, int *x, int *y);
+int distance_to_index(int8_t t, uint16_t idx, int16_t x, int16_t y);
 int search_nearest_index(int x, int y, int t);
-void set_marker_search(int mode);
-int marker_search(void);
-int marker_search_max(void);
-int marker_search_left(int from);
-int marker_search_right(int from);
-int marker_search_left_max(int from);
-int marker_search_right_max(int from);
-int marker_search_left_min(int from);
-int marker_search_right_min(int from);
+
+int marker_search_max(int m);
+int marker_search_left_max(int m);
+int marker_search_right_max(int m);
+int marker_search_left_min(int m);
+int marker_search_right_min(int m);
+void markers_reset(void);
 
 // _request flag for update screen
 #define REDRAW_CELLS      (1<<0)
@@ -639,22 +861,51 @@ int marker_search_right_min(int from);
 #define REDRAW_BATTERY    (1<<4)
 #define REDRAW_AREA       (1<<5)
 #define REDRAW_TRIGGER    (1<<6)
-extern volatile uint8_t redraw_request;
+extern  uint16_t redraw_request;
 
 /*
  * ili9341.c
  */
+// Set display buffers count for cell render (if use 2 and DMA, possible send data and prepare new in some time)
+
+#ifdef __USE_DISPLAY_DMA__
+// Cell size = sizeof(spi_buffer), but need wait while cell data send to LCD
+//#define DISPLAY_CELL_BUFFER_COUNT     1
+// Cell size = sizeof(spi_buffer)/2, while one cell send to LCD by DMA, CPU render to next cell
+#define DISPLAY_CELL_BUFFER_COUNT     2
+#else
+// Always one if no DMA mode
+#define DISPLAY_CELL_BUFFER_COUNT     1
+#endif
+
+// One pixel size
+typedef uint16_t pixel_t;
+
+#define CELLWIDTH  (64/DISPLAY_CELL_BUFFER_COUNT)
+#define CELLHEIGHT (32)
+
+// Define size of screen buffer in pixels (one pixel 16bit size)
+#define SPI_BUFFER_SIZE     (CELLWIDTH * CELLHEIGHT * DISPLAY_CELL_BUFFER_COUNT)
+
 // SPI bus revert byte order
 // 16-bit gggBBBbb RRRrrGGG
 #define RGB565(r,g,b)  ( (((g)&0x1c)<<11) | (((b)&0xf8)<<5) | ((r)&0xf8) | (((g)&0xe0)>>5) )
 #define RGBHEX(hex) ( (((hex)&0x001c00)<<3) | (((hex)&0x0000f8)<<5) | (((hex)&0xf80000)>>16) | (((hex)&0x00e000)>>13) )
 #define HEXRGB(hex) ( (((hex)>>3)&0x001c00) | (((hex)>>5)&0x0000f8) | (((hex)<<16)&0xf80000) | (((hex)<<13)&0x00e000) )
 
-// Define size of screen buffer in pixels (one pixel 16bit size)
-#define SPI_BUFFER_SIZE             (CELLWIDTH*CELLHEIGHT)
-
+// Define LCD display driver and screen size
+#ifdef TINYSA4
+#define LCD_DRIVER_ST7796S
+#define LCD_WIDTH                   480
+#define LCD_HEIGHT                  320
+#else
+#define LCD_DRIVER_ILI9341
 #define LCD_WIDTH                   320
 #define LCD_HEIGHT                  240
+#endif
+
+// Default LCD brightness if display support it
+#define DEFAULT_BRIGHTNESS       70
 
 #define LCD_BG_COLOR             0
 #define LCD_FG_COLOR             1
@@ -687,6 +938,7 @@ extern volatile uint8_t redraw_request;
 #define LCD_M_NOISE             28
 #define LCD_M_DEFAULT           29
 
+#if TRACES_MAX == 3
 #define LCD_DEFAULT_PALETTE {\
 [LCD_BG_COLOR         ] = RGB565(  0,  0,  0), \
 [LCD_FG_COLOR         ] = RGB565(255,255,255), \
@@ -694,9 +946,9 @@ extern volatile uint8_t redraw_request;
 [LCD_MENU_COLOR       ] = RGB565(230,230,230), \
 [LCD_MENU_TEXT_COLOR  ] = RGB565(  0,  0,  0), \
 [LCD_MENU_ACTIVE_COLOR] = RGB565(210,210,210), \
-[LCD_TRACE_1_COLOR    ] = RGB565(255,  0,  0), \
-[LCD_TRACE_2_COLOR    ] = RGB565(  0,255,  0), \
-[LCD_TRACE_3_COLOR    ] = RGB565(255,255,  0), \
+[LCD_TRACE_1_COLOR    ] = RGB565(255,255,  0), \
+[LCD_TRACE_2_COLOR    ] = RGB565( 64,255, 64), \
+[LCD_TRACE_3_COLOR    ] = RGB565(255, 64, 64), \
 [LCD_TRACE_4_COLOR    ] = RGB565(255,  0,255), \
 [LCD_NORMAL_BAT_COLOR ] = RGB565( 31,227,  0), \
 [LCD_LOW_BAT_COLOR    ] = RGB565(255,  0,  0), \
@@ -719,13 +971,47 @@ extern volatile uint8_t redraw_request;
 [LCD_M_NOISE          ] = RGB565(  0,255,255), \
 [LCD_M_DEFAULT        ] = RGB565(255,255,  0), \
 }
+#else
+#define LCD_DEFAULT_PALETTE {\
+[LCD_BG_COLOR         ] = RGB565(  0,  0,  0), \
+[LCD_FG_COLOR         ] = RGB565(255,255,255), \
+[LCD_GRID_COLOR       ] = RGB565(128,128,128), \
+[LCD_MENU_COLOR       ] = RGB565(230,230,230), \
+[LCD_MENU_TEXT_COLOR  ] = RGB565(  0,  0,  0), \
+[LCD_MENU_ACTIVE_COLOR] = RGB565(210,210,210), \
+[LCD_TRACE_1_COLOR    ] = RGB565(255,255,  0), \
+[LCD_TRACE_2_COLOR    ] = RGB565( 64,255, 64), \
+[LCD_TRACE_3_COLOR    ] = RGB565(255,  0,255), \
+[LCD_TRACE_4_COLOR    ] = RGB565(255, 64, 64), \
+[LCD_NORMAL_BAT_COLOR ] = RGB565( 31,227,  0), \
+[LCD_LOW_BAT_COLOR    ] = RGB565(255,  0,  0), \
+[LCD_TRIGGER_COLOR    ] = RGB565(  0,  0,255), \
+[LCD_RISE_EDGE_COLOR  ] = RGB565(255,255,255), \
+[LCD_FALLEN_EDGE_COLOR] = RGB565(128,128,128), \
+[LCD_SWEEP_LINE_COLOR ] = RGB565(  0,255,  0), \
+[LCD_BW_TEXT_COLOR    ] = RGB565(128,128,128), \
+[LCD_INPUT_TEXT_COLOR ] = RGB565(  0,  0,  0), \
+[LCD_INPUT_BG_COLOR   ] = RGB565(255,255,255), \
+[LCD_BRIGHT_COLOR_BLUE] = RGB565(  0,  0,255), \
+[LCD_BRIGHT_COLOR_RED ] = RGB565(255,128,128), \
+[LCD_BRIGHT_COLOR_GREEN]= RGB565(  0,255,  0), \
+[LCD_DARK_GREY        ] = RGB565(140,140,140), \
+[LCD_LIGHT_GREY       ] = RGB565(220,220,220), \
+[LCD_HAM_COLOR        ] = RGB565( 80, 80, 80), \
+[LCD_GRID_VALUE_COLOR ] = RGB565(196,196,196), \
+[LCD_M_REFERENCE      ] = RGB565(255,255,255), \
+[LCD_M_DELTA          ] = RGB565(  0,255,  0), \
+[LCD_M_NOISE          ] = RGB565(  0,255,255), \
+[LCD_M_DEFAULT        ] = RGB565(255,255,  0), \
+}
+#endif
 
 #define GET_PALTETTE_COLOR(idx)  config.lcd_palette[idx]
 
 extern uint16_t foreground_color;
 extern uint16_t background_color;
 
-extern uint16_t spi_buffer[SPI_BUFFER_SIZE];
+extern pixel_t spi_buffer[SPI_BUFFER_SIZE];
 
 // Used for easy define big Bitmap as 0bXXXXXXXXX image
 #define _BMP8(d)                                                        ((d)&0xFF)
@@ -735,119 +1021,174 @@ extern uint16_t spi_buffer[SPI_BUFFER_SIZE];
 
 void ili9341_init(void);
 void ili9341_test(int mode);
-void ili9341_bulk(int x, int y, int w, int h);
+void ili9341_bulk(int x, int y, int w, int h);              // send data to display, in DMA mode use it, but wait DMA complete
 void ili9341_fill(int x, int y, int w, int h);
+void ili9341_flip(bool flip);
+
+// Double buffer mode parser
+#if DISPLAY_CELL_BUFFER_COUNT == 1
+#define ili9341_get_cell_buffer()             spi_buffer
+#define ili9341_bulk_continue                 ili9341_bulk
+#define ili9341_bulk_finish()                 {}
+#else
+pixel_t *ili9341_get_cell_buffer(void);                     // get buffer for cell render
+void ili9341_bulk_continue(int x, int y, int w, int h);     // send data to display, in DMA mode use it, no wait DMA complete
+void ili9341_bulk_finish(void);                             // wait DMA complete (need call at end)
+#endif
 
 void ili9341_set_foreground(uint16_t fg_idx);
 void ili9341_set_background(uint16_t bg_idx);
 
 void ili9341_clear_screen(void);
-void blit8BitWidthBitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint8_t *bitmap);
-void blit16BitWidthBitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint16_t *bitmap);
+void ili9341_blitBitmap(int x, int y, int width, int height, const uint8_t *bitmap);
 void ili9341_drawchar(uint8_t ch, int x, int y);
 void ili9341_drawstring(const char *str, int x, int y);
 void ili9341_drawstring_7x13(const char *str, int x, int y);
 void ili9341_drawstring_10x14(const char *str, int x, int y);
+int  lcd_printf(int16_t x, int16_t y, const char *fmt, ...);
 void ili9341_drawstringV(const char *str, int x, int y);
-int  ili9341_drawchar_size(uint8_t ch, int x, int y, uint8_t size);
-void ili9341_drawstring_size(const char *str, int x, int y, uint8_t size);
+int  ili9341_drawchar_size(uint8_t ch, int x, int y, uint8_t size, int x_max);
+int  ili9341_drawstring_size(const char *str, int x, int y, uint8_t size, int x_max);
 void ili9341_drawfont(uint8_t ch, int x, int y);
-void ili9341_read_memory(int x, int y, int w, int h, int len, uint16_t* out);
+void ili9341_read_memory(int x, int y, int w, int h, uint16_t* out);
 void ili9341_line(int x0, int y0, int x1, int y1);
 void show_version(void);
+void lcd_setBrightness(uint16_t b);
+void spi_init(void);
 
 /*
  * flash.c
  */
 
-
 typedef struct setting
 {
   uint32_t magic;
-//  freq_t _frequency0;
-//  freq_t _frequency1;
-  int mode;
+  bool auto_reflevel;          // bool
+  bool auto_attenuation;       // bool
+  bool mirror_masking;         // bool
+  bool show_stored;            // bool
+  bool tracking_output;        // bool
+  bool mute;                   // bool
+  bool auto_IF;                // bool
+  bool sweep;                  // bool
+  bool pulse;                  // bool
+  bool stored[TRACES_MAX];     // enum
+  bool normalized[TRACES_MAX];     // enum
+
+  uint8_t mode;                // enum
+  uint8_t below_IF;            // enum
+  uint8_t unit;                // enum
+  uint8_t agc;                 // enum
+  uint8_t lna;                 // enum
+  uint8_t modulation;          // enum
+  uint8_t trigger;             // enum
+  uint8_t trigger_mode;        // enum
+  uint8_t trigger_direction;   // enum
+  uint8_t step_delay_mode;     // enum
+  uint8_t waterfall;           // enum
+#ifdef __LEVEL_METER__
+  uint8_t level_meter;         // enum
+#endif
+  uint8_t average[TRACES_MAX]; // enum
+  uint8_t subtract[TRACES_MAX];// index
+  uint8_t measurement;         // enum
+  uint8_t spur_removal;        // enum
+  int8_t normalized_trace;
+
+  int8_t  tracking;            // -1...1 Can NOT convert to bool!!!!!!
+  uint8_t atten_step;          //  0...1 !!! need convert to bool
+  int8_t _active_marker;       // -1...MARKER_MAX
+  uint8_t unit_scale_index;    // table index
+  uint8_t repeat;              // 1...100
+  uint8_t noise;               // 2...50
+  uint8_t lo_drive;            // 0-3 , 3dB steps
+  uint8_t rx_drive;            // 0-15 , 7=+20dBm, 3dB steps
+  uint8_t test;                // current test number
+  uint8_t harmonic;            // used harmonic number 1...5
+  uint8_t fast_speedup;        // 0 - 20
+  uint8_t  _traces;            // enabled traces flags
+
+  uint16_t linearity_step;     // range equal POINTS_COUNT
   uint16_t _sweep_points;
-  int16_t attenuate_x2;
-  int auto_attenuation;
-  int atten_step;
+  int16_t attenuate_x2;        // 0...60 !!! in calculation can be < 0
+
+  uint16_t step_delay;         // KM_SAMPLETIME   250...10000, 0=auto
+  uint16_t offset_delay;       // KM_OFFSET_DELAY 250...10000, 0=auto
+
+  uint16_t freq_mode;           //  0...1!!! need convert to bool or bit field
+  int16_t  refer;               // -1 disabled
+
+  uint16_t modulation_frequency;  // 50...6000
+  int decay;                      // KM_DECAY   < 1000000
+  int attack;                     // KM_ATTACK  <   20000
+
+  int32_t slider_position;
+  freq_t  slider_span;
+
   uint32_t rbw_x10;
-  int below_IF;
-  int average;
-  int show_stored;
-  int subtract_stored;
-  int lo_drive; // 0-3 , 3dB steps
-  int rx_drive; // 0-15 , 7=+20dBm, 3dB steps
-  int agc;
-  int lna;
-  int auto_reflevel;
+  uint32_t vbw_x100;
+  uint32_t scan_after_dirty[TRACES_MAX];
+
   float reflevel;
   float scale;
-  int tracking;
-  int modulation;
-  int step_delay;
-  freq_t frequency_step;
-  int test;
-  int harmonic;
-  int decay;
-  int attack;
-  int noise;
-  uint32_t vbw_x10;
-  int  tracking_output;
-  int repeat;
-  freq_t frequency0;
-  freq_t frequency1;
-  freq_t frequency_IF;
-  int freq_mode;
-  int measurement;
-  int refer;
-  int spur_removal;
-  int mirror_masking;
-  trace_t _trace[TRACES_MAX];
-  marker_t _markers[MARKERS_MAX];
-  int8_t _active_marker;
-  int8_t unit;
-  float offset;
+  float external_gain;
   float trigger_level;
-  int trigger_direction;
-  int trigger;
-  int linearity_step;
   float level;
   float level_sweep;
-  uint32_t sweep_time_us;
-  systime_t measure_sweep_time_us;
-  uint32_t actual_sweep_time_us;
-  uint32_t additional_step_delay_us;
-  int test_argument;
-  int auto_IF;
-  unsigned int unit_scale_index;
-  float unit_scale;
-  int mute;
-  int step_delay_mode;
-  int offset_delay;
-  int fast_speedup;
-  float normalize_level;     // Level to set normalize to, zero if not doing anything
-  int modulation_frequency;
-  int trigger_mode;
-  int slider_position;
-  int32_t slider_span;
-  freq_t *correction_frequency;
-  float   *correction_value;
 
-  uint32_t checksum;            // must be last
+  float unit_scale;
+  float normalize_level;     // Level to set normalize to, zero if not doing anything
+
+  freq_t frequency_step;
+  freq_t frequency0;
+  freq_t frequency1;
+  freq_t frequency_var;
+  freq_t frequency_IF;
+  freq_t frequency_offset;
+#define FREQUENCY_SHIFT ((freq_t)100000000)   // 100MHz upconversion maximum
+  float trace_scale;
+  float trace_refpos;
+  marker_t _markers[MARKERS_MAX];
+#ifdef __LIMITS__
+  limit_t limits[REFERENCE_MAX][LIMITS_MAX];
+#endif
+  systime_t sweep_time_us;
+  systime_t measure_sweep_time_us;
+  systime_t actual_sweep_time_us;
+  systime_t additional_step_delay_us;
+
+//  freq_t  *correction_frequency;
+//  float   *correction_value;
+
+#ifdef __ULTRA__
+  uint8_t ultra;    // enum ??
+#endif
+  #ifdef TINYSA4
+  bool    extra_lna;
+  int R;            // KM_R
+  int32_t exp_aver;
+  bool increased_R;
+#endif
+  int64_t test_argument;            // used for tests
+  uint32_t checksum;            // must be last and at 4 byte boundary
 }setting_t;
 
 extern setting_t setting;
 
-extern int setting_frequency_10mhz;
 void reset_settings(int m);
 
+void set_trace_scale(float scale);
+void set_trace_refpos(float refpos);
+#define get_trace_scale()  setting.trace_scale
+#define get_trace_refpos() setting.trace_refpos
 
 #define S_IS_AUTO(x) ((x)&2)
 #define S_STATE(X) ((X)&1)
 enum { S_OFF=0, S_ON=1, S_AUTO_OFF=2, S_AUTO_ON=3 };
 
-enum { SD_NORMAL, SD_PRECISE, SD_FAST, SD_MANUAL };
+enum { SD_NORMAL, SD_PRECISE, SD_FAST, SD_NOISE_SOURCE, SD_MANUAL };
+
+enum {W_OFF, W_SMALL, W_BIG};
 
 #ifdef __FAST_SWEEP__
 #define MINIMUM_SWEEP_TIME  1800U    // Minimum sweep time on zero span in uS
@@ -861,40 +1202,56 @@ enum { SD_NORMAL, SD_PRECISE, SD_FAST, SD_MANUAL };
 #define REPEAT_TIME         111         // Time per extra repeat in uS
 #define MEASURE_TIME        127         // Time per single point measurement with vbwstep =1 without step delay in uS
 
-extern freq_t frequencies[POINTS_COUNT];
 extern const float unit_scale_value[];
-extern const char * const unit_scale_text[];
-
+extern const char  unit_scale_text[];
+#ifdef TINYSA4
+extern int debug_frequencies;
+extern int linear_averaging;
+#endif
 #if 1   // Still sufficient flash
 // Flash save area - flash7  : org = 0x0801B000, len = 20k in *.ld file
 // 2k - for config save
 // 9 * 2k for setting_t + stored trace
-#define SAVEAREA_MAX 9
-// STM32 minimum page size for write
-#define FLASH_PAGESIZE          0x800
-// config save area (flash7 addr)
-#define SAVE_CONFIG_ADDR        0x0801B000
-#define SAVE_CONFIG_SIZE        0x00000800
-// setting_t save area (save area + config size)
-#define SAVE_PROP_CONFIG_ADDR   (SAVE_CONFIG_ADDR + SAVE_CONFIG_SIZE)
-#define SAVE_PROP_CONFIG_SIZE   0x00000800
-// Should include all save slots
-#define SAVE_CONFIG_AREA_SIZE   (SAVE_CONFIG_SIZE + SAVEAREA_MAX * SAVE_PROP_CONFIG_SIZE)
-#else           // Just in case flash runs out
-// Flash save area - flash7  : org = 0x0801D000, len = 12k in *.ld file
-// 2k - for config save
-// 9 * 2k for setting_t + stored trace
+#ifdef TINYSA4
 #define SAVEAREA_MAX 5
+#else
+#define SAVEAREA_MAX 5
+#endif
 // STM32 minimum page size for write
 #define FLASH_PAGESIZE          0x800
 // config save area (flash7 addr)
+#ifdef TINYSA3
 #define SAVE_CONFIG_ADDR        0x0801D000
+#endif
+
+#ifdef TINYSA4
+#define SAVE_CONFIG_ADDR        0x0803A800
+#endif
+
 #define SAVE_CONFIG_SIZE        0x00000800
 // setting_t save area (save area + config size)
 #define SAVE_PROP_CONFIG_ADDR   (SAVE_CONFIG_ADDR + SAVE_CONFIG_SIZE)
+#ifdef TINYSA4
+#define SAVE_PROP_CONFIG_SIZE   0x00001000
+#else
 #define SAVE_PROP_CONFIG_SIZE   0x00000800
+#endif
 // Should include all save slots
 #define SAVE_CONFIG_AREA_SIZE   (SAVE_CONFIG_SIZE + SAVEAREA_MAX * SAVE_PROP_CONFIG_SIZE)
+
+
+#else
+#define SAVEAREA_MAX 4
+// Begin addr                   0x0801C000
+#define SAVE_CONFIG_AREA_SIZE   0x00004000
+// config save area
+#define SAVE_CONFIG_ADDR        0x0801C000
+// properties_t save area
+#define SAVE_PROP_CONFIG_0_ADDR 0x0801C800
+#define SAVE_PROP_CONFIG_1_ADDR 0x0801D000
+#define SAVE_PROP_CONFIG_2_ADDR 0x0801D800
+#define SAVE_PROP_CONFIG_3_ADDR 0x0801E000
+#define SAVE_PROP_CONFIG_4_ADDR 0x0801e800
 #endif
 
 #if 0
@@ -933,13 +1290,21 @@ typedef struct properties {
 
 //sizeof(properties_t) == 0x1200
 
-#define CONFIG_MAGIC 0x434f4e47 /* 'CONF' */
+#define CONFIG_MAGIC 0x434f4e55 /* 'CONF' */
 
 extern int16_t lastsaveid;
 //extern properties_t *active_props;
 
 //extern properties_t current_props;
-
+#ifdef __USE_FREQ_TABLE__
+extern freq_t frequencies[POINTS_COUNT];
+#define getFrequency(idx) frequencies[idx]
+#ifndef getFrequency
+freq_t getFrequency(uint16_t idx);
+#endif
+#else
+freq_t getFrequency(uint16_t idx);
+#endif
 //#define frequency0 current_props._frequency0
 //#define frequency1 current_props._frequency1
 #define sweep_points setting._sweep_points
@@ -954,7 +1319,6 @@ extern int16_t lastsaveid;
 #define cal_data active_props->_cal_data
 #define electrical_delay current_props._electrical_delay
 #endif
-#define trace setting._trace
 #define markers setting._markers
 #define active_marker setting._active_marker
 #ifdef __VNA__
@@ -972,15 +1336,29 @@ int caldata_save(uint16_t id);
 //const properties_t *caldata_ref(int id);
 int config_save(void);
 int config_recall(void);
+setting_t * caldata_pointer(uint16_t id);
 
 void clear_all_config_prop_data(void);
 
 /*
  * ui.c
  */
+
+// Set structure align as WORD (save flash memory)
+#pragma pack(push, 2)
+typedef struct {
+  uint8_t type;
+  uint8_t data;
+  char *label;
+  const void *reference;
+} menuitem_t;
+#pragma pack(pop)
+
+
 extern void ui_init(void);
 extern void ui_process(void);
 int current_menu_is_form(void);
+extern float nf_gain;
 
 void ui_mode_normal(void);
 void ui_mode_menu(void);
@@ -988,8 +1366,15 @@ void menu_push_lowoutput(void);
 void menu_push_highoutput(void);
 void menu_move_top(void);
 void draw_menu(void);
+void draw_menu_mask(uint32_t mask);
+void refres_sweep_menu(void);
 int check_touched(void);
+void touch_set(int16_t x, int16_t y);
 int invoke_quick_menu(int);
+bool ui_process_listen_lever(void);
+void refresh_sweep_menu(int i);
+void save_to_sd(int mask);
+void drawMessageBox(char *header, char *text, uint32_t delay);
 
 // Irq operation process set
 #define OP_NONE       0x00
@@ -1010,11 +1395,9 @@ enum marker_smithvalue {
 };
 
 typedef struct uistat {
-  float value; // for editing at numeric input area
-  int8_t digit; /* 0~5 */
-  int8_t digit_mode;
+  float  value; // for editing at numeric input area
+  freq_t freq_value; // for editing frequencies that do not fit in float;
   int8_t current_trace; /* 0..3 */
-//  uint32_t previous_value;
   uint8_t lever_mode;
   uint8_t marker_delta;
   uint8_t marker_noise;
@@ -1031,8 +1414,9 @@ typedef struct ui_button {
   union {
     int32_t  i;
     uint32_t u;
+    float    f;
     const char *text;
-  } param_1, param_2;    // void data for label printf
+  } param_1;    // void data for label printf
   char text[32];
 } ui_button_t;
 
@@ -1050,7 +1434,6 @@ void ui_init(void);
 void ui_show(void);
 void ui_hide(void);
 
-void touch_start_watchdog(void);
 void touch_position(int *x, int *y);
 void handle_touch_interrupt(void);
 
@@ -1060,18 +1443,107 @@ void touch_cal_exec(void);
 void touch_draw_test(void);
 void enter_dfu(void);
 
+#ifdef TINYSA4
+extern char range_text[20];
+#endif
+
 /*
  * adc.c
  */
+#ifdef TINYSA4
+#define rccEnableWWDG(lp) rccEnableAPB1(RCC_APB1ENR_WWDGEN, lp)
+#define ADC_TOUCH_X  ADC_CHANNEL_IN3
+#define ADC_TOUCH_Y  ADC_CHANNEL_IN4
+uint16_t adc1_single_read(uint32_t chsel);
+#else
 #define ADC_TOUCH_X  ADC_CHSELR_CHSEL6
 #define ADC_TOUCH_Y  ADC_CHSELR_CHSEL7
+#endif
 
 void adc_init(void);
 uint16_t adc_single_read(uint32_t chsel);
-void adc_start_analog_watchdogd(uint32_t chsel);
-void adc_stop(void);
-void adc_interrupt(void);
+void adc_start_analog_watchdog(void);
+void adc_stop_analog_watchdog(void);
 int16_t adc_vbat_read(void);
+
+/*
+ * rtc.c
+ */
+#ifdef __USE_RTC__
+#define RTC_START_YEAR          2000
+
+#define RTC_DR_YEAR(dr)         (((dr)>>16)&0xFF)
+#define RTC_DR_MONTH(dr)        (((dr)>> 8)&0xFF)
+#define RTC_DR_DAY(dr)          (((dr)>> 0)&0xFF)
+
+#define RTC_TR_HOUR(dr)         (((tr)>>16)&0xFF)
+#define RTC_TR_MIN(dr)          (((tr)>> 8)&0xFF)
+#define RTC_TR_SEC(dr)          (((tr)>> 0)&0xFF)
+
+// Init RTC
+void rtc_init(void);
+// Then read time and date TR should read first, after DR !!!
+// Get RTC time as bcd structure in 0x00HHMMSS
+#define rtc_get_tr_bcd() (RTC->TR & 0x007F7F7F)
+// Get RTC date as bcd structure in 0x00YYMMDD (remove day of week information!!!!)
+#define rtc_get_dr_bcd() (RTC->DR & 0x00FF1F3F)
+// read TR as 0x00HHMMSS in bin (TR should be read first for sync)
+uint32_t rtc_get_tr_bin(void);
+// read DR as 0x00YYMMDD in bin (DR should be read second)
+uint32_t rtc_get_dr_bin(void);
+// Read time in FAT filesystem format
+uint32_t rtc_get_FAT(void);
+// Write date and time (need in bcd format!!!)
+void rtc_set_time(uint32_t dr, uint32_t tr);
+#endif
+
+// SD Card support, discio functions for FatFS lib implemented in ili9341.c
+#ifdef  __USE_SD_CARD__
+#include "../FatFs/ff.h"
+#include "../FatFs/diskio.h"
+bool SD_Inserted(void);
+// Buffers for SD card use spi_buffer
+#if SPI_BUFFER_SIZE < 2048
+#error "SPI_BUFFER_SIZE for SD card support need size >= 2048"
+#else
+// Fat file system work area (at the end of spi_buffer)
+#define fs_volume    (FATFS *)(((uint8_t*)(&spi_buffer[SPI_BUFFER_SIZE])) - sizeof(FATFS))
+// FatFS file object (at the end of spi_buffer)
+#define fs_file      (   FIL*)(((uint8_t*)(&spi_buffer[SPI_BUFFER_SIZE])) - sizeof(FATFS) - sizeof(FIL))
+// Filename object (at the end of spi_buffer)
+#define fs_filename  (  char*)(((uint8_t*)(&spi_buffer[SPI_BUFFER_SIZE])) - sizeof(FATFS) - sizeof(FIL) - FF_LFN_BUF - 4)
+#endif
+void testLog(void);        // debug log
+void sd_card_load_config(char *filename);
+#endif
+
+/*
+ * Backup
+ */
+#pragma pack(push)
+#pragma pack(1)
+
+#ifdef TINYSA4
+extern uint8_t SI4463_rbw_selected;
+#else
+extern uint8_t SI4432_rbw_selected;
+#endif
+extern const menuitem_t  menu_lowoutputmode[];
+extern const menuitem_t  menu_highoutputmode[];
+extern const menuitem_t  menu_mode[];
+extern void menu_push_submenu(const menuitem_t *submenu);
+
+typedef struct {
+  uint32_t    frequency0, frequency1;
+  uint8_t attenuation;
+  uint8_t reflevel;
+  uint8_t RBW;
+  uint8_t mode;
+} backup_t;
+#pragma pack(pop)
+
+#define backup (*(uint32_t *)0x40002850)   // backup registers 5 * 32 bits
+
 
 /*
  * misclinous
@@ -1084,10 +1556,11 @@ int plot_printf(char *str, int, const char *fmt, ...);
 //extern int actualStepDelay;
 //extern int setting_mode;
 
+#define ARRAY_COUNT(a)    (sizeof(a)/sizeof(*(a)))
 // Speed profile definition
 #define START_PROFILE   systime_t time = chVTGetSystemTimeX();
 #define RESTART_PROFILE   time = chVTGetSystemTimeX();
-#define STOP_PROFILE    {char string_buf[12];plot_printf(string_buf, sizeof string_buf, "%06d", chVTGetSystemTimeX() - time);ili9341_drawstring(string_buf, 0, FREQUENCIES_YPOS);}
+#define STOP_PROFILE    {char string_buf[12];plot_printf(string_buf, sizeof string_buf, "%06d", chVTGetSystemTimeX() - time);ili9341_set_foreground(LCD_FG_COLOR);ili9341_drawstring(string_buf, 0, FREQUENCIES_YPOS);}
 #define DELTA_TIME (time = chVTGetSystemTimeX() - time)
 // Macros for convert define value to string
 #define STR1(x)  #x
@@ -1097,10 +1570,9 @@ int plot_printf(char *str, int, const char *fmt, ...);
 
 typedef uint8_t  deviceRSSI_t;
 typedef int16_t  pureRSSI_t;
-
+extern int current_index;
 // RSSI values conversion macro
-// External programm zero level settings (need decrease on this value -)
-#define EXT_ZERO_LEVEL            (128)
+
 #define DEVICE_TO_PURE_RSSI(rssi) ((rssi)<<4)
 #define PURE_TO_DEVICE_RSSI(rssi) ((rssi)>>4)
 #define float_TO_PURE_RSSI(rssi)  ((rssi)*32)
@@ -1108,12 +1580,11 @@ typedef int16_t  pureRSSI_t;
 
 extern uint16_t actual_rbw_x10;
 
-int get_waterfall(void);
 void toggle_tracking(void);
 void toggle_hambands(void);
 void reset_calibration(void);
 void set_reflevel(float);
-void set_offset(float);
+void set_external_gain(float);
 void set_unit(int);
 void set_switches(int);
 void set_gridlines(int);
@@ -1127,16 +1598,60 @@ void self_test(int);
 void wait_user(void);
 void calibrate(void);
 float to_dBm(float);
+float dBm_to_Watt(float);
 uint32_t calc_min_sweep_time_us(void);
 pureRSSI_t perform(bool b, int i, freq_t f, int e);
 void interpolate_maximum(int m);
+void calibrate_modulation(int modulation, int8_t *correction);
 
 enum {
-  M_OFF, M_IMD, M_OIP3, M_PHASE_NOISE, M_STOP_BAND, M_PASS_BAND, M_LINEARITY, M_AM, M_FM, M_THD
+  M_OFF, M_IMD, M_OIP3, M_PHASE_NOISE, M_SNR, M_PASS_BAND, M_LINEARITY, M_AM, M_FM, M_THD, M_CP, M_NF_TINYSA, M_NF_STORE, M_NF_VALIDATE, M_NF_AMPLIFIER, M_DECONV
 };
 
 enum {
   T_AUTO, T_NORMAL, T_SINGLE, T_DONE, T_UP, T_DOWN, T_MODE, T_PRE, T_POST, T_MID
 };
 
+//!!! Warning can show not correct results on CH_CFG_ST_FREQUENCY not round by 1000 or > 1000000UL
+#define sa_ST2US(n) ((n)*(1000000UL/(CH_CFG_ST_FREQUENCY)))
+
+extern const uint8_t SI4432_RBW_count;
+extern void SI4432_Listen(int s);
+
+#ifdef TINYSA4
+// si4432.c
+
+extern void ADF4351_mux(int R);
+extern void ADF4351_force_refresh(void);
+extern void ADF4351_CP(int p);
+extern void ADF4351_modulo(int m);
+extern void ADF4351_csr(int c);
+extern void ADF4351_fastlock(int c);
+extern void ADF4351_recalculate_PFDRFout(void);
+extern int SI4463_R;
+extern int64_t ADF4350_modulo;
+extern void SI446x_set_AGC_LNA(uint8_t v);
+extern void SI4463_init_rx(void);
+extern void SI4463_init_tx(void);
+extern void SI4463_start_tx(uint8_t CHANNEL);
+extern void SI4463_set_output_level(int t);
+extern freq_t SI4463_set_freq(freq_t freq);
+extern uint16_t set_rbw(uint16_t rbw_x10);
+extern uint16_t force_rbw(int f);
+extern void SI4463_do_api(void* data, uint8_t len, void* out, uint8_t outLen);
+extern void SI4463_set_gpio(int i, int s);
+extern void si_set_offset(int16_t offset);
+extern void si_fm_offset(int16_t offset);
+extern bool ADF4351_frequency_changed;
+extern bool SI4463_frequency_changed;
+extern bool SI4463_offset_changed;
+extern int16_t SI4463_noise_correction_x10;
+void switch_SI4463_RSSI_correction(bool);
+extern int old_R;
+extern float Si446x_get_temp(void);
+#define ENBW_Hz    SI4463_ENBW_Hz
+#endif
+#ifdef TINYSA3
+#define ENBW_Hz    actual_rbw_x10*100;
+#endif
 /*EOF*/

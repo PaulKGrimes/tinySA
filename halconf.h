@@ -59,9 +59,9 @@
  * @brief   Enables the DAC subsystem.
  */
 #if !defined(HAL_USE_DAC) || defined(__DOXYGEN__)
-#define HAL_USE_DAC                 TRUE
+#define HAL_USE_DAC                 FALSE
 #endif
-
+#define STM32_DMA_REQUIRED
 /**
  * @brief   Enables the EXT subsystem.
  */
@@ -150,7 +150,7 @@
  * @brief   Enables the SPI subsystem.
  */
 #if !defined(HAL_USE_SPI) || defined(__DOXYGEN__)
-#define HAL_USE_SPI                 TRUE
+#define HAL_USE_SPI                 FALSE
 #endif
 
 /**
@@ -291,7 +291,7 @@
  *          default configuration.
  */
 #if !defined(SERIAL_DEFAULT_BITRATE) || defined(__DOXYGEN__)
-#define SERIAL_DEFAULT_BITRATE      38400
+#define SERIAL_DEFAULT_BITRATE      115200
 #endif
 
 /**
@@ -317,7 +317,11 @@
  *          buffers.
  */
 #if !defined(SERIAL_USB_BUFFERS_SIZE) || defined(__DOXYGEN__)
-#define SERIAL_USB_BUFFERS_SIZE     64
+#ifdef TINYSA4
+#define SERIAL_USB_BUFFERS_SIZE     128
+#else
+#define SERIAL_USB_BUFFERS_SIZE     128
+#endif
 #endif
 
 /**

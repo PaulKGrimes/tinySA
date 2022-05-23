@@ -22,15 +22,12 @@
 
 #define __SI4432_H__
 
-extern int SI4432_step_delay;
-extern int SI4432_offset_delay;
+extern uint32_t SI4432_step_delay;
+extern uint32_t SI4432_offset_delay;
 #ifdef __SI4432__
 
 //
 #define MAX_SI4432                         2
-
-#define SI4432_RX                          0
-#define SI4432_LO                          1
 // #define SI4432_DUMMY                       2     // never used
 
 #define SI4432_DEV_TYPE                    0x00
@@ -109,14 +106,21 @@ extern int SI4432_offset_delay;
 #define SI4432_FIFO                        0x7F
 
 
-extern volatile int SI4432_Sel;         // currently selected SI4432
+extern  uint16_t SI4432_Sel;         // currently selected SI4432
 
-extern int SI4432_frequency_changed;
-extern int SI4432_offset_changed;
+extern uint8_t SI4432_frequency_changed;
+extern uint8_t SI4432_offset_changed;
 
-void SI4432_Write_Byte(uint8_t ADR, uint8_t DATA );
-void SI4432_Write_2_Byte(uint8_t ADR, uint8_t DATA1, uint8_t DATA2);
-uint8_t SI4432_Read_Byte( uint8_t ADR );
+void SI4432_shiftOutDword(uint32_t buf, uint16_t size);
+#define SI4432_Write_Byte(ADR, DATA)                  {uint32_t temp = (((ADR|0x80)&0xFF)<<0)|(((DATA )&0xFF)<<8); SI4432_shiftOutDword(temp, 2);}
+#define SI4432_Write_2_Byte(ADR, DATA1, DATA2)        {uint32_t temp = (((ADR|0x80)&0xFF)<<0)|(((DATA1)&0xFF)<<8)|(((DATA2)&0xFF)<<16);SI4432_shiftOutDword(temp, 3);}
+#define SI4432_Write_3_Byte(ADR, DATA1, DATA2, DATA3) {uint32_t temp = (((ADR|0x80)&0xFF)<<0)|(((DATA1)&0xFF)<<8)|(((DATA2)&0xFF)<<16)|(((DATA3)&0xFF)<<24);SI4432_shiftOutDword(temp, 4);}
+
+//void SI4432_Write_Byte(uint8_t ADR, uint8_t DATA);
+//void SI4432_Write_2_Byte(uint8_t ADR, uint8_t DATA1, uint8_t DATA2);
+//void SI4432_Write_3_Byte(uint8_t ADR, uint8_t DATA1, uint8_t DATA2, uint8_t DATA3 );
+
+uint8_t SI4432_Read_Byte(uint8_t ADR);
 
 void SI4432_Transmit(int d);
 void SI4432_Receive(void);
@@ -133,7 +137,6 @@ void SI4432_Set_Frequency ( uint32_t Freq );
 
 uint16_t force_rbw(int i);
 uint16_t set_rbw(uint16_t WISH);
-extern const int SI4432_RBW_count;
 void set_calibration_freq(int freq);
 #ifdef __FAST_SWEEP__
 void SI4432_Fill(int s, int start);
@@ -150,24 +153,60 @@ bool PE4302_Write_Byte(unsigned char DATA );
 void PE4302_init(void);
 
 #ifdef __ADF4351__
-extern int ADF4351_LE[];
+extern ioline_t ADF4351_LE[];
 extern int debug;
 void   ADF4351_Setup(void);
 
 
 void ADF4351_WriteRegister32(int channel, const uint32_t value);
-freq_t ADF4351_set_frequency(int channel, freq_t freq, int drive_strength);
-freq_t ADF4351_prep_frequency(int channel, freq_t freq, int drive_strength);
+uint64_t ADF4351_set_frequency(int channel, uint64_t freq);
+uint64_t ADF4351_prepare_frequency(int channel, uint64_t freq);
 //int ADF4351_set_frequency_with_offset(uint32_t freq, int offset, uint8_t drive_strength);
 void ADF4351_Set(int channel);
-void ADF4351_enable_output(void);
-void ADF4351_disable_output(void);
 void ADF4351_spur_mode(int S);
 void ADF4351_R_counter(int R);
 void ADF4351_channel_spacing(int spacing);
 void ADF4351_CP(int p);
-void ADF4351_level(int p);
+void ADF4351_drive(int p);
+void ADF4351_aux_drive(int p);
+void ADF4351_enable(int p);
+void ADF4351_enable_aux_out(int p);
+void ADF4351_enable_out(int p);
 int ADF4351_locked(void);
+void ADF4350_shift_ref(int f);
+
+void ADF4351_enable(int s);
+void ADF4351_enable_aux_out(int s);
+extern int si5351_available;
+#endif
+
+#ifdef __SI4463__
+#include "si446x_defs.h"
+#include "si446x.h"
+int16_t Si446x_RSSI(void);
+uint8_t getFRR(uint8_t reg);
+si446x_state_t getState(void);
+void setState(si446x_state_t newState);
+
+extern si446x_info_t SI4463_info;
+pureRSSI_t getSI4463_RSSI_correction(void);
+void Si446x_getInfo(si446x_info_t* info);
+void SI446x_Fill(int s, int start);
+void SI4463_init(void);
+void set_calibration_freq(int freq);
+#define ADF4351_LO 3
+#define ADF4351_LO2 4
+#define SI4463_RX  2
+
+#endif
+
+#ifdef TINYSA4
+void enable_extra_lna(int s);
+void enable_ultra(int s);
+void enable_rx_output(int s);
+void enable_high(int s);
+void enable_direct(int s);
+void enable_ADF_output(int f);
 #endif
 
 

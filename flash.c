@@ -21,7 +21,7 @@
 #include "hal.h"
 #include "nanovna.h"
 #include <string.h>
-
+#include "usbcfg.h"
 static int flash_wait_for_last_operation(void)
 {
   while (FLASH->SR == FLASH_SR_BSY) {
@@ -70,8 +70,11 @@ checksum(const void *start, size_t len)
   uint32_t *p = (uint32_t*)start;
   uint32_t *tail = (uint32_t*)(start + len);
   uint32_t value = 0;
-  while (p < tail)
-    value = __ROR(value, 31) + *p++;
+  while (p < tail) {
+    value = __ROR(value, 31) + *p;
+//    if (SDU1.config->usbp->state == USB_ACTIVE) shell_printf("%x, %x\r\n", *p, value);
+    p++;
+  }
   return value;
 }
 
@@ -107,7 +110,8 @@ config_recall(void)
 
   if (src->magic != CONFIG_MAGIC)
     return -1;
-  if (checksum(src, sizeof *src - sizeof src->checksum) != src->checksum)
+//  if (SDU1.config->usbp->state == USB_ACTIVE) shell_printf("Checksum %x\r\n", src->checksum);
+  if (checksum(src, sizeof config - sizeof config.checksum) != src->checksum)
     return -1;
 
   /* duplicated saved data onto sram to be able to modify marker/trace */
@@ -130,8 +134,12 @@ caldata_save(uint16_t id)
   dst = (uint16_t*)(SAVE_PROP_CONFIG_ADDR + id * SAVE_PROP_CONFIG_SIZE);
 
   setting.magic = CONFIG_MAGIC;
+  setting.checksum = 0x12345678;
   setting.checksum = checksum(
-      &setting, sizeof setting - sizeof setting.checksum);
+      &setting,
+//      (sizeof (setting)) - sizeof setting.checksum
+      (void *)&setting.checksum - (void *) &setting
+      );
 
   flash_unlock();
 
@@ -163,6 +171,28 @@ caldata_save(uint16_t id)
   return 0;
 }
 
+setting_t *
+caldata_pointer(uint16_t id)
+{
+  setting_t *src;
+
+  if (id >= SAVEAREA_MAX)
+    return NULL;
+
+  // point to saved area on the flash memory
+  src = (setting_t*)(SAVE_PROP_CONFIG_ADDR + id * SAVE_PROP_CONFIG_SIZE);
+
+  if (src->magic != CONFIG_MAGIC)
+    return NULL;
+//  if (SDU1.config->usbp->state == USB_ACTIVE) shell_printf("Checksum %x\r\n", src->checksum);
+  if (checksum(src,
+//               (sizeof (setting)) - sizeof src->checksum
+               (void *)&setting.checksum - (void *) &setting
+               ) != src->checksum)
+    return NULL;
+  return src;
+}
+
 int
 caldata_recall(uint16_t id)
 {
@@ -177,7 +207,11 @@ caldata_recall(uint16_t id)
 
   if (src->magic != CONFIG_MAGIC)
     return -1;
-  if (checksum(src, sizeof setting - sizeof src->checksum) != src->checksum)
+//  if (SDU1.config->usbp->state == USB_ACTIVE) shell_printf("Checksum %x\r\n", src->checksum);
+  if (checksum(src,
+//               (sizeof (setting)) - sizeof src->checksum
+               (void *)&setting.checksum - (void *) &setting
+               ) != src->checksum)
     return -1;
 
   /* active configuration points to save data on flash memory */
@@ -187,11 +221,16 @@ caldata_recall(uint16_t id)
   /* duplicated saved data onto sram to be able to modify marker/trace */
   memcpy(dst, src, sizeof(setting_t));
   // Restore stored trace
-  memcpy(stored_t, &src[1], sizeof(stored_t));
+  src = &(src[1]);
+  memcpy(stored_t, src, sizeof(stored_t));
   update_min_max_freq();
   update_frequencies();
   set_scale(setting.scale);
   set_reflevel(setting.reflevel);
+  set_waterfall();
+  set_level_meter();
+  if (setting.show_stored)
+    enableTracesAtComplete(TRACE_STORED_FLAG);
   return 0;
 }
 #if 0
