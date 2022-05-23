@@ -19,6 +19,15 @@ def getport() -> str:
 REF_LEVEL = (1<<9)
 
 class TinySA:
+    _valid_units = [
+        "dBm",
+        "dBmV",
+        "dBuV",
+        "RAW",
+        "V",
+        "W"
+    ]
+
     def __init__(self, dev = None):
         self.dev = dev or getport()
         self.serial = None
@@ -27,79 +36,24 @@ class TinySA:
         self._unit = None
         self._reflevel = None
         self._scale = None
-        # list of booleans for the status of the three possible traces
-        self._traces = [False, False, False]
-
-    @property
-    def frequencies(self):
-        return self._frequencies
-
-    def set_frequencies(self, start = 1e6, stop = 900e6, points = None):
-        if points:
-            self.points = points
-        self._frequencies = np.linspace(start, stop, self.points)
-
-    @property
-    def unit(self):
-        return self._unit
 
     def open(self):
+        """Open the serial connection to the tinySA."""
         if self.serial is None:
             self.serial = serial.Serial(self.dev)
 
     def close(self):
+        """Close the serial connection to the tinySA."""
         if self.serial:
             self.serial.close()
         self.serial = None
 
     def send_command(self, cmd):
+        if cmd[-1] != "\r":
+            cmd = cmd + "\r"
         self.open()
         self.serial.write(cmd.encode())
         self.serial.readline() # discard empty line
-
-    def set_sweep(self, start, stop):
-        if start is not None:
-            self.send_command("sweep start %d\r" % start)
-        if stop is not None:
-            self.send_command("sweep stop %d\r" % stop)
-
-    def set_frequency(self, freq):
-        if freq is not None:
-            self.send_command("freq %d\r" % freq)
-
-    def set_gain(self, gain):
-        if gain is not None:
-            self.send_command("gain %d\r" % gain)
-
-    def set_output_level(self, level):
-        if level is not None:
-            self.send_command("level %d\r" % level)
-
-    def get_trace_info(self):
-        """Get information about the current traces from the tinySA.
-        Most importantly, this tells us the units for the data returned by
-        `.data()`.
-
-        parameters:
-            trace (int): the trace number to set."""
-        self.send_command("trace\r")
-        resp = self.fetch_data()
-        lines = resp.split("\n")
-        self._traces = [False, False, False]
-
-        for line in lines:
-            if line:
-                lline = line.split()
-                trace = int(lline[0][0])
-                unit = lline[1]
-                reflevel = float(lline[2])
-                scale = float(lline[3])
-                self._traces[trace] = True
-
-        self._unit = unit
-        self._reflevel = reflevel
-        self._scale = scale
-
 
     def fetch_data(self):
         """Receive data returned by a command sent to the TinySA
@@ -123,32 +77,277 @@ class TinySA:
                 break
         return result
 
-    def fetch_buffer(self, freq = None, buffer = 0):
-        self.send_command("dump %d\r" % buffer)
-        data = self.fetch_data()
-        x = []
-        for line in data.split('\n'):
-            if line:
-                x.extend([int(d, 16) for d in line.strip().split(' ')])
-        return np.array(x, dtype=np.int16)
+    def query(self, cmd):
+        """Send a command and listen for the response.
 
-    def fetch_rawwave(self, freq = None):
-        if freq:
-            self.set_frequency(freq)
-            time.sleep(0.05)
-        self.send_command("dump 0\r")
-        data = self.fetch_data()
-        x = []
-        for line in data.split('\n'):
-            if line:
-                x.extend([int(d, 16) for d in line.strip().split(' ')])
-        return np.array(x[0::2], dtype=np.int16), np.array(x[1::2], dtype=np.int16)
+        parameters:
+            cmd (str): command to set to the TinySA.
+
+        returns:
+            str: string of lines separated by `\r\n`
+        """
+        self.send_command(cmd)
+        return self.fetch_data()
+
+    def capture(self):
+        """Return a screen capture of the tinySA"""
+        from PIL import Image
+        self.send_command("capture\r")
+        b = self.serial.read(320 * 240 * 2)
+        x = struct.unpack(">76800H", b)
+        # convert pixel format from 565(RGB) to 8888(RGBA)
+        arr = np.array(x, dtype=np.uint32)
+        arr = 0xFF000000 + ((arr & 0xF800) >> 8) + ((arr & 0x07E0) << 5) + ((arr & 0x001F) << 19)
+        return Image.frombuffer('RGBA', (320, 240), arr, 'raw', 'RGBA', 0, 1)
+
+    def get_sweep(self):
+        """Get the sweep start and stop frequencies in Hz, and the number of
+        points.
+
+        returns:
+            tuple of (float, float, int): start and stop frequencies in Hz and number
+                                          of points in sweep.
+        """
+        lines = self.query("sweep")
+        slines = lines.split()
+        self._sweep_start = float(slines[0])
+        self._sweep_stop = float(slines[1])
+        self._points = int(slines[2])
+
+        return self._sweep_start, self._sweep_stop, self._points
+
+    @property
+    def sweep_start(self):
+        """Return the starting frequency of the sweep in Hz. This is a stored value
+        from the last time that `.get_sweep()` was called.
+
+        return:
+            float: sweep start frequency in Hz
+        """
+        return self._sweep_start
+
+    @property
+    def sweep_stop(self):
+        """Return the stoping frequency of the sweep in Hz. This is a stored value
+        from the last time that `.get_sweep()` was called.
+
+        return:
+            float: sweep stop frequency in Hz
+        """
+        return self._sweep_stop
+
+    @property
+    def sweep_center(self):
+        """Return the center frequency of the sweep in Hz. This is a stored value
+        from the last time that `.get_sweep()` was called.
+
+        return:
+            float: sweep center frequency in Hz
+        """
+        return (self._sweep_start + self._sweep_stop) / 2
+
+    @property
+    def sweep_span(self):
+        """Return the span frequency of the sweep in Hz. This is a stored value
+        from the last time that `.get_sweep()` was called.
+
+        return:
+            float: sweep span frequency in Hz
+        """
+        return (self._sweep_stop - self._sweep_start)
+
+    @property
+    def sweep_points(self):
+        """Return the number of points in the sweep. This is a stored value
+        from the last time that `.get_sweep()` was called
+
+        returns:
+            int: number of points in the sweep.
+        """
+        return self._points
+
+
+    def set_sweep(self, start, stop):
+        """Set the sweep with a start and stop frequency in Hz
+
+        parameters:
+            start (float): start frequency in Hz
+            stop  (float): stop frequency in Hz
+        """
+        if start is not None:
+            self.send_command("sweep start %d\r" % start)
+        if stop is not None:
+            self.send_command("sweep stop %d\r" % stop)
+
+    def set_sweep_start(self, start):
+        """Set the sweep with start frequency in Hz
+
+        parameters:
+            start (float): start frequency in Hz
+        """
+        if start is not None:
+            self.send_command("sweep start %d\r" % start)
+
+    def set_sweep_stop(self, stop):
+        """Set the sweep with stop frequency in Hz
+
+        parameters:
+            stop (float): stop frequency in Hz
+        """
+        if stop is not None:
+            self.send_command("sweep stop %d\r" % stop)
+
+    def set_sweep_center(self, center):
+        """Set the sweep with center frequency in Hz
+
+        parameters:
+            center (float): center frequency in Hz
+        """
+        if center is not None:
+            self.send_command("sweep center %d\r" % center)
+
+    def set_sweep_span(self, span):
+        """Set the sweep with span frequency in Hz
+
+        parameters:
+            span (float): span frequency in Hz
+        """
+        if span is not None:
+            self.send_command("sweep span %d\r" % span)
+
+    def set_sweep_cw(self, cw):
+        """Set the sweep to a fixed cw frequency in Hz
+
+        parameters:
+            cw (float): cw frequency in Hz
+        """
+        if span is not None:
+            self.send_command("sweep cw %d\r" % cw)
 
     def resume(self):
+        """Resume the sweep"""
         self.send_command("resume\r")
 
     def pause(self):
+        """Pause the sweep"""
         self.send_command("pause\r")
+
+    def get_trace_info(self):
+        """Get information about the current traces from the tinySA.
+        Most importantly, this tells us the units for the data returned by
+        `.data()`.
+
+        parameters:
+            trace (int): the trace number to set."""
+        self.send_command("trace\r")
+        resp = self.fetch_data()
+        lines = resp.split("\n")
+        self._traces = [False, False, False]
+
+        for line in lines:
+            if line:
+                lline = line.split()
+                trace = int(lline[0][0])
+                units = lline[1]
+                reflevel = float(lline[2])
+                scale = float(lline[3])
+                self._traces[trace] = True
+
+        self._units = units
+        self._reflevel = reflevel
+        self._scale = scale
+
+    @property
+    def units(self):
+        """A string representing the units of the trace.  This value is a stored value
+        from the last time `.get_trace_info()` was called.
+
+        returns:
+            str: units
+        """
+        return self._units
+
+    @property
+    def ref_level(self):
+        """The reference level of the trace in `.units`.  This value is a stored value
+        from the last time `.get_trace_info()` was called.
+
+        returns:
+            float: ref_level in `.units`
+        """
+        return self._ref_level
+
+    @property
+    def scale(self):
+        """The scale of the trace in `.units`/div. This value is a stored value from
+        the last time `.get_trace_info()` was called.
+
+        returns:
+            float: scale in `.units`/div
+        """
+        return self._scale
+
+    def set_units(self, units="dBm"):
+        """Set the units of the traces to one of: dBm, dBmV, dBuV, RAW, V, W
+
+        parameters:
+            units (str): string representing the units, one of `._valid_units`"""
+        if units not in self._valid_units:
+            raise runtimeError(f"{units} is not a valid option.")
+        else
+            self.send_command(f"trace {units}")
+            self._units = units
+
+    def set_ref_level(self, ref_level):
+        """Set the reference level in `.units`.
+
+        parameters:
+            ref_level (float): ref_level in `units`.
+        """
+        self.send_command(f"trace reflevel {ref_level:.2f}")
+        self._ref_level = ref_level
+
+    def set_scale(self, scale):
+        """Set the scale on the trace in `.units`/div.
+
+        parameters:
+            scale (float): scale in `.units`/div
+        """
+        self.send_command(f"trace scale {scale:.1f}")
+        self._scale = scale
+
+    def copy_trace(self, source, destination):
+        """Copy the source trace to the destination trace.
+
+        parameters:
+            source (int): 1..3 number of trace to copy from
+            destination (int): 1..3 number of trace to copy to
+        """
+        if source <= 0 or source > 3:
+            raise ValueError("Source trace number must be between 1 and 3")
+        if destination <= 0 or destination > 3:
+            raise ValueError("Destination trace number must be between 1 and 3")
+        if source == destination:
+            # silently do nothing
+            return
+        else:
+            self.send_command(f"trace copy {source:d} {destination:d}")
+        
+
+    def set_gain(self, gain):
+        """Sets the extenal gain value, which is used to correct the input or output
+        levels.
+
+        parameters:
+            gain (float): external gain value in dB
+        """
+        if gain is not None:
+            self.send_command("ext_gain %d\r" % gain)
+
+    def set_output_level(self, level):
+        if level is not None:
+            self.send_command("level %d\r" % level)
+
 
     def data(self, array = 0):
         """Fetch data in array from the TinySA, and convert to a Numpy Array.
@@ -172,7 +371,21 @@ class TinySA:
                 x.append(float(d))
         return np.array(x)
 
-    def fetch_frequencies(self):
+    @property
+    def frequencies(self):
+        """Frequencies in sweep. This is a stored set of frequencies from the last
+        time `.get_frequencies()` was called.
+
+        returns:
+            numpy.Array: array of frequencies in Hz
+        """
+        return self._frequencies
+
+    def get_frequencies(self):
+        """Get the frequencies in the current sweep.
+
+        returns:
+            numpy.Array: array of frequencies in Hz."""
         self.send_command("frequencies\r")
         data = self.fetch_data()
         x = []
@@ -180,6 +393,8 @@ class TinySA:
             if line:
                 x.append(float(line))
         self._frequencies = np.array(x)
+
+        return self._frequencies
 
     def send_scan(self, start = 1e6, stop = 900e6, points = None):
         if points:
@@ -205,16 +420,6 @@ class TinySA:
             freqs = freqs[segment_length:]
         self.resume()
         return (array0, array1)
-
-    def capture(self):
-        from PIL import Image
-        self.send_command("capture\r")
-        b = self.serial.read(320 * 240 * 2)
-        x = struct.unpack(">76800H", b)
-        # convert pixel format from 565(RGB) to 8888(RGBA)
-        arr = np.array(x, dtype=np.uint32)
-        arr = 0xFF000000 + ((arr & 0xF800) >> 8) + ((arr & 0x07E0) << 5) + ((arr & 0x001F) << 19)
-        return Image.frombuffer('RGBA', (320, 240), arr, 'raw', 'RGBA', 0, 1)
 
     def logmag(self, x):
         """Plot the supplied amplitude data in dB"""
