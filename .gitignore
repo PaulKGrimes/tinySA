@@ -4,11 +4,10 @@
 build*
 test
 CMSIS
-python
-*.py
-*.ipynb
 TAGS
 .emacs-dirvars
+*ipynb_checkpoints*
+*__pycache__*
 *png
 *.bak
 version.txt
@@ -16,5 +15,5 @@ dorelease.bat
 ChibiOS
 .settings/language.settings.xml
 .cproject
-Rubbish*
 desktop.ini
+
